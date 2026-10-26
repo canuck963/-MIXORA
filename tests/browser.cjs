@@ -7,11 +7,11 @@ function wav(hz){const n=44100*2,b=Buffer.alloc(44+n*2);b.write('RIFF');b.writeU
  await page.goto('http://localhost:8000/Remix.html');
  for(const id of ['A','B']){await page.locator('#file'+id).setInputFiles({name:id+'.wav',mimeType:'audio/wav',buffer:wav(id==='A'?220:440)});await page.waitForFunction(id=>document.getElementById('name'+id).textContent.includes('.wav'),id);}
  for(let i=0;i<3;i++){await page.locator('#threeSuggestions button').nth(i).click();await page.locator('#play').click();await page.waitForTimeout(150);await page.locator('#stop').click();assert.equal(await page.locator('#clips .clip').count(),2);}
- await page.locator('#saveProject').click();await page.waitForFunction(()=>!document.getElementById('saveProject').disabled);assert.match(await page.locator('#status').textContent(),/saklandı/);
+ await page.locator('#saveProject').click();await page.waitForFunction(()=>/saklandı|İşlem tamamlanamadı/.test(document.getElementById('status').textContent));assert.match(await page.locator('#status').textContent(),/saklandı/);
  await page.locator('#clear').click();await page.locator('#restoreProject').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Proje açıldı'));
  const downloadPromise=page.waitForEvent('download');await page.locator('#export').click();const download=await downloadPromise;const path=await download.path();const out=fs.readFileSync(path);assert.equal(out.toString('ascii',0,4),'RIFF');assert.ok(out.length>10000);
  let energy=0;for(let i=44;i<out.length;i+=2)energy+=Math.abs(out.readInt16LE(i));assert.ok(energy>100000,'rendered audio is not silent');
- await page.locator('#saveLocalMix').click();await page.waitForFunction(()=>!document.getElementById('saveLocalMix').disabled);assert.match(await page.locator('#status').textContent(),/Remix kaydedildi/);
+ await page.locator('#saveLocalMix').click();await page.waitForFunction(()=>/Remix kaydedildi|İşlem tamamlanamadı/.test(document.getElementById('status').textContent));assert.match(await page.locator('#status').textContent(),/Remix kaydedildi/);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await page.screenshot({path:'/tmp/mixora-studio-'+name+'.png',fullPage:true});
  await page.goto('http://localhost:8000/local-community.html');await page.waitForSelector('#feed audio');

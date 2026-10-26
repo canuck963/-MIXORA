@@ -32,7 +32,7 @@ $('saveLocalMix').onclick=()=>busy('saveLocalMix',async()=>{
   const length=plan(clips).length;if(length>300)throw Error('Cihaz kütüphanesi için en fazla 5 dakika seç.');
   note('Ses hazırlanıyor…');const engine=new OfflineAudioContext(2,Math.ceil((length+.2)*44100),44100);schedule(clips,engine,0);
   const file=new File([wav(await engine.startRendering())],'MIXORA-remix.wav',{type:'audio/wav'});
-  await writeDB('mixora-community-demo','posts',{id:crypto.randomUUID(),author:'Ben',title:$('projectName').value||'Yeni remix',description:'MIXORA Studio kaydı',file,created:Date.now(),likes:0,liked:false,comments:[]});
+  await writeDB('mixora-community-demo','posts',{id:crypto.randomUUID(),author:'Ben',title:$('projectName').value||'Yeni remix',description:'MIXORA Studio kaydı',fileBytes:await file.arrayBuffer(),fileName:file.name,fileType:file.type,created:Date.now(),likes:0,liked:false,comments:[]});
   note('✓ Remix kaydedildi. Cihazdaki kayıtlar sayfasından dinleyip ses dosyasını paylaşabilirsin.');
 });
 window.addEventListener('pagehide',()=>stop());
