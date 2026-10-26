@@ -10,7 +10,7 @@ This change retains the original live DJ page and both manual remix editors, and
 - `local-community.html`: original community demo, retaining `mixora-community-demo` database compatibility. Existing device records remain accessible.
 - `community.html` + `server.py`: registration/login/logout, public name/bio profiles, public uploads/playback/link sharing, idempotent likes, comments and owner-only deletion. Reads are public; writes require a session. Twenty-post feed pages, up to 100 recent comments per post.
 
-The three suggestions are **rule-based arrangements**, not AI-generated stems, musical phrase detection, automatic key detection or studio-grade beat matching. They use the beginnings of the two sources; users should audition and adjust the cuts. Live playback speed uses the existing browser playback controls. The advanced timeline does not yet offer pitch-preserving time stretch, stem separation or beat-grid editing.
+The three suggestions are **rule-based arrangements**, not AI-generated stems, musical phrase detection, automatic key detection or studio-grade beat matching. They preserve the full A/B selections (including nonzero entry points) and add no synthetic bass effects. Duygusal, Enerjik and Sinematik can be auditioned without changing the timeline or its fade setting, then explicitly applied. Users must still choose and audition musical phrase boundaries; overlapping vocals are not separated. Live playback speed uses the existing browser playback controls. The advanced timeline does not yet offer pitch-preserving time stretch, stem separation or beat-grid editing.
 
 ## Run locally
 

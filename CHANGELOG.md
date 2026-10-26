@@ -1,3 +1,10 @@
+## Selection-aware remix comparison
+
+- Duygusal, Enerjik and Sinematik now retain the selected A/B source ranges instead of restarting at zero or truncating at arbitrary 32/60-second boundaries.
+- Suggestions no longer inject synthesized bass effects; manual effects remain available.
+- Separate audition/apply controls preserve the working timeline and fade during comparison.
+- Added selection-boundary unit coverage and mobile browser assertions for non-destructive preview and nonzero source entries.
+
 # Development report — 2026-10-26
 
 ## Inspected baseline

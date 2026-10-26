@@ -13,3 +13,9 @@ test('reject invalid times and missing audio',()=>{
  for(const d of [undefined,NaN,0,-1,Infinity])assert.throws(()=>suggestions(d,30));
  assert.throws(()=>plan([{id:'A',start:5,end:3}]));assert.throws(()=>plan([{id:'B',start:0,end:3,delay:Infinity}]));assert.throws(()=>plan([],NaN));
 });
+test('suggestions preserve selected phrases without adding synthetic effects',()=>{
+ const ranges={A:{start:42,end:115},B:{start:19,end:88}};
+ for(const s of suggestions(120,90,ranges))for(const c of s.clips){assert.equal(c.start,ranges[c.id].start);assert.equal(c.end,ranges[c.id].end);assert.equal(c.effect,'none');assert.equal(c.impact,0);}
+ for(const A of [{start:-1,end:3},{start:2,end:121},{start:3,end:2},{start:NaN,end:3},{start:1,end:1.1}])assert.throws(()=>suggestions(120,90,{...ranges,A}));
+ assert.throws(()=>suggestions(120,90,{}));
+});

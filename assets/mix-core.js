@@ -13,14 +13,20 @@ function plan(list, fade=1){
   }
   return {items,length:end};
 }
-function suggestions(a,b){
-  if(![a,b].every(d=>Number.isFinite(d)&&d>=.3))throw Error('Önce iki geçerli ses dosyası yükle.');
-  const clip=(id,start,end,extra={})=>({id,start,end,volume:.85,effect:'none',impact:0,overlay:false,...extra});
-  const ad=Math.min(a,60),bd=Math.min(b,60);
+function suggestions(a,b,selections){
+  if(![a,b].every(d=>Number.isFinite(d)&&d>=.15))throw Error('Önce iki geçerli ses dosyası yükle.');
+  const ranges={};
+  for(const [id,duration] of [['A',a],['B',b]]){
+    const r=selections?selections[id]:{start:0,end:duration};
+    if(!r||!Number.isFinite(r.start)||!Number.isFinite(r.end)||r.start<0||r.end>duration||r.end-r.start<.15)throw Error('Başlangıç ve bitiş saniyelerini kontrol et.');
+    ranges[id]=r;
+  }
+  const clip=(id,extra={})=>({id,...ranges[id],volume:.85,effect:'none',impact:0,overlay:false,...extra});
+  const ad=ranges.A.end-ranges.A.start;
   return [
-    {name:'Akıcı geçiş',description:'A’dan B’ye uzun, yumuşak çapraz geçiş.',fade:5,clips:[clip('A',0,ad),clip('B',0,bd)]},
-    {name:'Enerjik DROP',description:'A’nın ardından B’ye kısa geçiş ve bas vurgusu.',fade:.25,clips:[clip('A',0,Math.min(ad,32)),clip('B',0,bd,{effect:'hard',impact:.65})]},
-    {name:'Sinematik katman',description:'B, A’nın üzerine yavaşça girer; A’nın sesi azalır.',fade:2,clips:[clip('A',0,ad,{effect:'emotional',impact:.5}),clip('B',0,bd,{overlay:true,delay:ad*.4,overVol:.8,duck:true,effect:'cinematic',impact:.5})]}
+    {name:'Duygusal',description:'Seçtiğin iki bölüm arasında yumuşak geçiş.',fade:5,clips:[clip('A'),clip('B')]},
+    {name:'Enerjik',description:'Seçtiğin giriş noktalarında kısa geçiş; ek bas efekti yok.',fade:.25,clips:[clip('A',{volume:.95}),clip('B',{volume:.95})]},
+    {name:'Sinematik',description:'B, A’nın üzerine girer; A’nın sesi azalır. Vokaller çakışabilir; dinleyerek kontrol et.',fade:2,clips:[clip('A'),clip('B',{overlay:true,delay:ad*.4,overVol:.8,duck:true})]}
   ];
 }
 const api={plan,suggestions};if(typeof module==='object')module.exports=api;else root.MixCore=api;
