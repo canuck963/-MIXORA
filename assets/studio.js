@@ -15,12 +15,13 @@ async function latestProject(){const db=await openDB('mixora-studio','projects')
 async function busy(id,fn){const button=$(id);button.disabled=true;try{await fn();}catch(e){note('İşlem tamamlanamadı: '+e.message);}finally{button.disabled=false;}}
 $('saveProject').onclick=()=>busy('saveProject',async()=>{
   if(!tracks.A||!tracks.B||!clips.length)throw Error('İki parçayı yükle ve çizelge oluştur.');
-  await writeDB('mixora-studio','projects',{id:'latest',name:$('projectName').value,files:{A:tracks.A.file,B:tracks.B.file},clips:structuredClone(clips),fade:Number($('fade').value)});note('✓ Proje ve kaynak sesler bu cihazda saklandı.');
+  const files={};for(const id of ['A','B']){const file=tracks[id].file;files[id]={name:file.name,type:file.type,bytes:await file.arrayBuffer()};}
+  await writeDB('mixora-studio','projects',{id:'latest',name:$('projectName').value,files,clips:structuredClone(clips),fade:Number($('fade').value)});note('✓ Proje ve kaynak sesler bu cihazda saklandı.');
 });
 $('restoreProject').onclick=()=>busy('restoreProject',async()=>{
   const project=await latestProject();if(!project)throw Error('Saklanmış proje yok.');
   // Decode everything before mutating the working project.
-  const next={};for(const id of ['A','B']){const file=project.files[id];next[id]={file,buffer:await ctx.decodeAudioData(await file.arrayBuffer())};}
+  const next={};for(const id of ['A','B']){const saved=project.files[id],file=saved.bytes?new File([saved.bytes],saved.name,{type:saved.type}):saved;next[id]={file,buffer:await ctx.decodeAudioData(await file.arrayBuffer())};}
   MixCore.plan(project.clips,project.fade);
   for(const c of project.clips)if(c.end>next[c.id].buffer.duration+.001)throw Error('Proje kesitleri ses süresini aşıyor.');
   stop();for(const id of ['A','B']){loadVersions[id]++;tracks[id]=next[id];$('name'+id).textContent=next[id].file.name;$('start'+id).value=0;$('end'+id).value=String(next[id].buffer.duration);draw(id);}
