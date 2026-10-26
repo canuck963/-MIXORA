@@ -6,6 +6,9 @@ import os
 from pathlib import Path
 import re
 import secrets
+import smtplib
+from email.message import EmailMessage
+from urllib.parse import quote
 import sqlite3
 import time
 from http.cookies import SimpleCookie
@@ -45,6 +48,8 @@ def initialize():
         CREATE TABLE IF NOT EXISTS likes(post_id TEXT REFERENCES posts(id) ON DELETE CASCADE,user_id TEXT REFERENCES users(id) ON DELETE CASCADE,PRIMARY KEY(post_id,user_id));
         CREATE TABLE IF NOT EXISTS comments(id TEXT PRIMARY KEY,post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,user_id TEXT NOT NULL REFERENCES users(id),body TEXT NOT NULL,created REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS limits(key TEXT PRIMARY KEY,start REAL NOT NULL,count INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS email_tokens(token TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,purpose TEXT NOT NULL,expires REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS verified_emails(user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,verified_at REAL NOT NULL);
         CREATE INDEX IF NOT EXISTS posts_created ON posts(created DESC);
         CREATE INDEX IF NOT EXISTS comments_post ON comments(post_id,created);
         ''')
@@ -101,6 +106,33 @@ def audio_type(data):
     if data[4:8] == b'ftyp' and data[8:12] in (b'M4A ',b'isom',b'mp42'): return 'audio/mp4'
     fail(415,'MP3, WAV veya M4A ses dosyası gerekli.')
 
+def send_email(to, subject, message):
+    host=os.environ.get('MIXORA_SMTP_HOST')
+    sender=os.environ.get('MIXORA_SMTP_FROM')
+    if not host or not sender:
+        fail(503,'E-posta servisi yapılandırılmadı.')
+    mail=EmailMessage()
+    mail['From']=sender
+    mail['To']=to
+    mail['Subject']=subject
+    mail.set_content(message)
+    port=int(os.environ.get('MIXORA_SMTP_PORT','587'))
+    with smtplib.SMTP(host,port,timeout=12) as smtp:
+        smtp.starttls()
+        smtp.login(os.environ['MIXORA_SMTP_USER'],os.environ['MIXORA_SMTP_PASSWORD'])
+        smtp.send_message(mail)
+
+def issue_email_token(db, row, purpose):
+    raw=secrets.token_urlsafe(32)
+    digest=hashlib.sha256(raw.encode()).hexdigest()
+    db.execute('DELETE FROM email_tokens WHERE user_id=? AND purpose=?',(row['id'],purpose))
+    db.execute('INSERT INTO email_tokens VALUES(?,?,?,?)',(digest,row['id'],purpose,time.time()+1800))
+    db.commit()
+    endpoint='verify-email' if purpose=='verify' else 'reset-password'
+    link=ORIGIN+'/api/'+endpoint+'?token='+quote(raw)
+    send_email(row['email'],'MIXORA e-posta işlemi','Bu işlemi sen başlattıysan 30 dakika içinde bağlantıyı aç:\\n'+link)
+    return {'ok':True}
+
 def route(env, db):
     path=env.get('PATH_INFO','/'); method=env['REQUEST_METHOD']; headers=[]
     if method not in ('GET','POST','PATCH','DELETE'): fail(405,'Yöntem desteklenmiyor.')
@@ -109,6 +141,37 @@ def route(env, db):
         limit(db,'ip:'+env.get('REMOTE_ADDR','unknown'),120)
     user,token=session(db,env)
     if path == '/api/health': return 200,{'ok':True},headers
+    if path == '/api/verify-email' and method == 'GET':
+        token=parse_qs(env.get('QUERY_STRING','')).get('token',[''])[0]
+        digest=hashlib.sha256(token.encode()).hexdigest()
+        record=db.execute("SELECT user_id FROM email_tokens WHERE token=? AND purpose='verify' AND expires>?",(digest,time.time())).fetchone()
+        if not record: fail(400,'Doğrulama bağlantısı geçersiz veya süresi dolmuş.')
+        db.execute('INSERT OR REPLACE INTO verified_emails VALUES(?,?)',(record['user_id'],time.time()))
+        db.execute('DELETE FROM email_tokens WHERE token=?',(digest,))
+        return 200,{'ok':True,'message':'E-posta doğrulandı. Giriş yapabilirsin.'},headers
+    if path == '/api/reset-password' and method == 'POST':
+        limit(db,'reset:'+env.get('REMOTE_ADDR','unknown'),5,3600)
+        data=body(env)
+        raw=field(data,'token',256)
+        password=field(data,'password',128,10)
+        digest=hashlib.sha256(raw.encode()).hexdigest()
+        record=db.execute("SELECT user_id FROM email_tokens WHERE token=? AND purpose='reset' AND expires>?",(digest,time.time())).fetchone()
+        if not record: fail(400,'Sıfırlama bağlantısı geçersiz veya süresi dolmuş.')
+        db.execute('UPDATE users SET password=? WHERE id=?',(password_hash(password),record['user_id']))
+        db.execute('DELETE FROM email_tokens WHERE user_id=?',(record['user_id'],))
+        db.execute('DELETE FROM sessions WHERE user_id=?',(record['user_id'],))
+        return 200,{'ok':True},headers
+    if path in ('/api/request-verification','/api/forgot-password') and method == 'POST':
+        limit(db,'email:'+env.get('REMOTE_ADDR','unknown'),5,3600)
+        data=body(env)
+        email=field(data,'email',254).lower()
+        row=db.execute('SELECT * FROM users WHERE email=?',(email,)).fetchone()
+        if row:
+            if path == '/api/forgot-password':
+                issue_email_token(db,row,'reset')
+            elif not db.execute('SELECT 1 FROM verified_emails WHERE user_id=?',(row['id'],)).fetchone():
+                issue_email_token(db,row,'verify')
+        return 200,{'ok':True,'message':'Hesap uygunsa e-posta gönderildi.'},headers
     if path == '/api/me' and method == 'GET': return 200,{'user':public_user(user) if user else None},headers
     if path in ('/api/register','/api/login') and method == 'POST':
         limit(db,'auth:'+env.get('REMOTE_ADDR','unknown'),15)
@@ -120,10 +183,13 @@ def route(env, db):
             uid=secrets.token_hex(16); name=field(data,'name',40)
             db.execute('INSERT INTO users(id,email,password,name) VALUES(?,?,?,?)',(uid,email,password_hash(password),name))
             row=db.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+            if os.environ.get('MIXORA_SMTP_HOST'):
+                issue_email_token(db,row,'verify')
         else:
             stored=row['password'] if row else password_hash('dummy-password')
             valid=hmac.compare_digest(stored,password_hash(password,stored.split(':')[0]))
             if not row or not valid: fail(401,'E-posta veya şifre hatalı.')
+            if os.environ.get('MIXORA_SMTP_HOST') and not db.execute('SELECT 1 FROM verified_emails WHERE user_id=?',(row['id'],)).fetchone(): fail(403,'E-posta doğrulaması gerekli.')
         raw=secrets.token_urlsafe(32); digest=hashlib.sha256(raw.encode()).hexdigest()
         db.execute('DELETE FROM sessions WHERE expires<?',(time.time(),))
         if token: db.execute('DELETE FROM sessions WHERE token=?',(token,))
