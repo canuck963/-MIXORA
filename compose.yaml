@@ -1,0 +1,28 @@
+services:
+  mixora:
+    build: .
+    restart: unless-stopped
+    environment:
+      MIXORA_ORIGIN: https://${MIXORA_HOST:?Set MIXORA_HOST to your domain}
+      MIXORA_DATA: /data
+    volumes:
+      - mixora_data:/data
+    expose:
+      - "8000"
+    mem_limit: 1g
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      MIXORA_HOST: ${MIXORA_HOST:?Set MIXORA_HOST to your domain}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - mixora
+volumes:
+  mixora_data:
+  caddy_data:

@@ -1,0 +1,7 @@
+{$MIXORA_HOST} {
+    request_body {
+        max_size 61MB
+    }
+    reverse_proxy mixora:8000
+    encode gzip
+}
