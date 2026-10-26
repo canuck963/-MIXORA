@@ -57,6 +57,28 @@ class API(unittest.TestCase):
         with server.connect() as db:
             self.assertEqual(db.execute('SELECT count(*) FROM likes').fetchone()[0],0)
             self.assertEqual(db.execute('SELECT count(*) FROM comments').fetchone()[0],0)
+    def test_account_deletion_requires_password_and_cleans_up(self):
+        a,uid=self.register()
+        b,bid=self.register('b@example.com')
+        own_post,_=self.post(a)
+        other_post,_=self.post(b)
+        self.assertEqual(self.call('/api/posts/'+own_post+'/likes','POST',cookie=b)['status'],200)
+        self.assertEqual(self.call('/api/posts/'+own_post+'/comments','POST',{'body':'Hello'},cookie=b)['status'],201)
+        self.assertEqual(self.call('/api/posts/'+other_post+'/comments','POST',{'body':'My comment'},cookie=a)['status'],201)
+        wrong=self.call('/api/account','DELETE',{'password':'incorrect'},cookie=a)
+        self.assertEqual(wrong['status'],403)
+        self.assertEqual(self.call('/api/me',cookie=a)['body']['user']['id'],uid)
+        self.assertEqual(self.call('/api/account','DELETE',{'password':'a-strong-password'},cookie=a)['status'],200)
+        self.assertIsNone(self.call('/api/me',cookie=a)['body']['user'])
+        self.assertEqual(self.call('/api/posts/'+own_post)['status'],404)
+        self.assertEqual(self.call('/api/posts/'+other_post)['status'],200)
+        self.assertEqual(self.call('/api/posts/'+other_post+'/comments')['body']['comments'],[])
+        self.assertEqual(self.call('/api/profiles/'+uid)['status'],404)
+        self.assertEqual(self.call('/api/me',cookie=b)['body']['user']['id'],bid)
+        with server.connect() as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM sessions WHERE user_id=?',(uid,)).fetchone()[0],0)
+            self.assertEqual(db.execute('SELECT count(*) FROM likes').fetchone()[0],0)
+
     def test_security(self):
         cookie,_=self.register()
         self.assertEqual(self.call('/api/profile','PATCH',{'name':'Evil','bio':''},cookie=cookie,headers={'HTTP_ORIGIN':'https://evil.test'})['status'],403)
