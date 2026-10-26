@@ -23,7 +23,7 @@ $('restoreProject').onclick=()=>busy('restoreProject',async()=>{
   const next={};for(const id of ['A','B']){const file=project.files[id];next[id]={file,buffer:await ctx.decodeAudioData(await file.arrayBuffer())};}
   MixCore.plan(project.clips,project.fade);
   for(const c of project.clips)if(c.end>next[c.id].buffer.duration+.001)throw Error('Proje kesitleri ses süresini aşıyor.');
-  stop();for(const id of ['A','B']){tracks[id]=next[id];$('name'+id).textContent=next[id].file.name;$('start'+id).value=0;$('end'+id).value=String(next[id].buffer.duration);draw(id);}
+  stop();for(const id of ['A','B']){loadVersions[id]++;tracks[id]=next[id];$('name'+id).textContent=next[id].file.name;$('start'+id).value=0;$('end'+id).value=String(next[id].buffer.duration);draw(id);}
   clips.splice(0,clips.length,...project.clips);$('fade').value=project.fade;$('fade').dispatchEvent(new Event('input'));$('projectName').value=project.name;render();note('✓ Proje açıldı.');
 });
 $('saveLocalMix').onclick=()=>busy('saveLocalMix',async()=>{

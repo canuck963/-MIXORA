@@ -9,6 +9,7 @@ import secrets
 import sqlite3
 import time
 from http.cookies import SimpleCookie
+from contextlib import contextmanager
 from urllib.parse import parse_qs
 
 ROOT = Path(__file__).parent
@@ -19,11 +20,19 @@ MAX_AUDIO = 60 * 1024 * 1024
 STATIC = {'index.html','Remix.html','remix.html','community.html','local-community.html',
           'assets/platform.css','assets/community.js','assets/studio.js','assets/mix-core.js'}
 
+@contextmanager
 def connect():
     db = sqlite3.connect(DATA / 'mixora.sqlite', timeout=20)
     db.row_factory = sqlite3.Row
     db.execute('PRAGMA foreign_keys=ON')
-    return db
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 def initialize():
     DATA.mkdir(parents=True, exist_ok=True, mode=0o700)
