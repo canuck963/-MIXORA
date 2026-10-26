@@ -135,6 +135,24 @@ def route(env, db):
         headers.append(('Set-Cookie','mixora_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+('; Secure' if SECURE else '')))
         return 200,{'ok':True},headers
     if path.startswith('/api/') and method != 'GET' and not user: fail(401,'Önce giriş yap.')
+    if path == '/api/account' and method == 'DELETE':
+        # Require fresh password proof before permanently deleting an account.
+        data=body(env)
+        password=field(data,'password',128,1)
+        limit(db,'delete-account:'+user['id'],5,3600)
+        if not hmac.compare_digest(user['password'],password_hash(password,user['password'].split(':')[0])):
+            fail(403,'Şifre doğrulanamadı.')
+        # Posts have dependent likes/comments; remove them before the user.
+        # Other users' comments on this user's posts disappear with those posts.
+        db.execute('DELETE FROM comments WHERE post_id IN (SELECT id FROM posts WHERE user_id=?)',(user['id'],))
+        db.execute('DELETE FROM likes WHERE post_id IN (SELECT id FROM posts WHERE user_id=?)',(user['id'],))
+        db.execute('DELETE FROM posts WHERE user_id=?',(user['id'],))
+        db.execute('DELETE FROM comments WHERE user_id=?',(user['id'],))
+        db.execute('DELETE FROM likes WHERE user_id=?',(user['id'],))
+        db.execute('DELETE FROM sessions WHERE user_id=?',(user['id'],))
+        db.execute('DELETE FROM users WHERE id=?',(user['id'],))
+        headers.append(('Set-Cookie','mixora_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+('; Secure' if SECURE else '')))
+        return 200,{'ok':True},headers
     if path == '/api/profile' and method == 'PATCH':
         data=body(env); name=field(data,'name',40); bio=field(data,'bio',300,0)
         db.execute('UPDATE users SET name=?,bio=? WHERE id=?',(name,bio,user['id']))
