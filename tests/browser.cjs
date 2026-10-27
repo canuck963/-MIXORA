@@ -18,7 +18,11 @@ function wav(hz){const n=44100*2,b=Buffer.alloc(44+n*2);b.write('RIFF');b.writeU
  await page.goto('http://localhost:8000/local-community.html');await page.waitForSelector('#feed audio');
  await page.goto('http://localhost:8000/community.html');await page.locator('#email').fill('browser-'+name+'-'+Date.now()+'@example.com');await page.locator('#password').fill('browser-safe-password');await page.locator('#name').fill('DJ Browser');await page.locator('#register').click();await page.waitForSelector('#profile:not(.hidden)');
  await page.locator('#title').fill('Tarayıcı remix testi');await page.locator('#audioFile').setInputFiles({name:'mix.wav',mimeType:'audio/wav',buffer:out});await page.locator('#rights').check();await page.locator('#publishBtn').click();await page.waitForSelector('.post audio');
- await page.locator('.post button').filter({hasText:'♡'}).click();await page.waitForFunction(()=>document.querySelector('.post').textContent.includes('♥ 1'));
+ const likeButton=page.locator('.post button').filter({hasText:'♡'}).first();
+ const likeResponse=page.waitForResponse(r=>r.url().includes('/likes')&&['POST','DELETE'].includes(r.request().method()));
+ await likeButton.click();const likeResult=await likeResponse;
+ assert.equal(likeResult.status(),200,name+' like request failed: '+await likeResult.text());
+ await page.waitForFunction(()=>[...document.querySelectorAll('.post button')].some(b=>/^♥\\s+1$/.test(b.textContent.trim())),null,{timeout:10000});
  await page.locator('summary').click();await page.locator('.post input').fill('Harika');await page.locator('.post button').filter({hasText:'Yorum ekle'}).click();await page.waitForSelector('.comment');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:'/tmp/mixora-community-'+name+'.png',fullPage:true});
  await page.goto('http://localhost:8000/index.html');await page.locator('#goStudio').click();await page.locator('#fileA').setInputFiles({name:'a.wav',mimeType:'audio/wav',buffer:wav(220)});await page.locator('#playBoth').click();await page.waitForTimeout(100);await page.locator('#pauseBoth').click();
