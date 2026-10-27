@@ -5,6 +5,11 @@ services:
     environment:
       MIXORA_ORIGIN: https://${MIXORA_HOST:?Set MIXORA_HOST to your domain}
       MIXORA_DATA: /data
+      MIXORA_SMTP_HOST: ${MIXORA_SMTP_HOST:-}
+      MIXORA_SMTP_PORT: ${MIXORA_SMTP_PORT:-587}
+      MIXORA_SMTP_FROM: ${MIXORA_SMTP_FROM:-}
+      MIXORA_SMTP_USER: ${MIXORA_SMTP_USER:-}
+      MIXORA_SMTP_PASSWORD: ${MIXORA_SMTP_PASSWORD:-}
     volumes:
       - mixora_data:/data
     expose:
