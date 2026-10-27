@@ -36,6 +36,25 @@ docker compose up --build -d
 
 Only the proxy is exposed; the application port stays inside the Docker network. Keep the named `mixora_data` volume. `MIXORA_ORIGIN` is derived from the domain; HTTPS enables Secure cookies and HSTS. No server was provisioned and no DNS, domain, billing, or deployment account was changed by this implementation. Docker/TLS deployment is supplied but has not been exercised here.
 
+## E-posta gönderimi (gerçek kayıtlar için)
+
+`compose.yaml`, SMTP ayarlarını artık uygulama konteynerine aktarır. Gerçek alan adı ve SMTP hesabı sahibi tarafından sağlanmalıdır. Değerleri herkese açık depoya veya ekran görüntülerine yazmayın.
+
+Sunucuda `.env` dosyasına aşağıdaki değişkenleri ekleyin:
+
+```dotenv
+MIXORA_HOST=YOUR_OWN_DOMAIN
+MIXORA_SMTP_HOST=YOUR_SMTP_HOST
+MIXORA_SMTP_PORT=587
+MIXORA_SMTP_FROM=YOUR_VERIFIED_SENDER
+MIXORA_SMTP_USER=YOUR_SMTP_USERNAME
+MIXORA_SMTP_PASSWORD=YOUR_SMTP_SECRET
+```
+
+Ardından `docker compose up --build -d` çalıştırın. `MIXORA_SMTP_HOST` ayarlı olduğunda e-posta doğrulaması giriş için zorunlu olur. Bu ortam değişkenleri boş bırakılırsa gerçek e-posta gönderimi çalışmaz; herkese açık kayıt açılmamalıdır.
+
+Gerçek SMTP gönderimi, teslimat, spam klasörü, bağlantı süre sonu ve parola sıfırlama akışları canlı ortamda ayrıca sınanmalıdır. Docker/TLS dağıtımı ve SMTP sağlayıcısı bu depoda otomatik olarak kurulmuş değildir.
+
 ## Security and storage boundaries
 
 - Passwords: per-password random salt + scrypt, never plaintext. Sessions: random tokens, hashed in SQLite, HttpOnly/SameSite=Lax cookies, seven-day expiry, revocation on logout; Secure on HTTPS.
