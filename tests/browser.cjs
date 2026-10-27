@@ -16,7 +16,14 @@ function wav(hz){const n=44100*2,b=Buffer.alloc(44+n*2);b.write('RIFF');b.writeU
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await page.screenshot({path:'/tmp/mixora-studio-'+name+'.png',fullPage:true});
  await page.goto('http://localhost:8000/local-community.html');await page.waitForSelector('#feed audio');
- await page.goto('http://localhost:8000/community.html');await page.locator('#email').fill('browser-'+name+'-'+Date.now()+'@example.com');await page.locator('#password').fill('browser-safe-password');await page.locator('#name').fill('DJ Browser');await page.locator('#register').click();await page.waitForSelector('#profile:not(.hidden)');
+ await page.goto('http://localhost:8000/community.html');await page.locator('#email').fill('browser-'+name+'-'+Date.now()+'@example.com');await page.locator('#password').fill('browser-safe-password');await page.locator('#name').fill('DJ Browser');await page.route('**/api/register',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({user:null,verification_required:true,message:'E-postanı doğrula.'})}));
+ await page.locator('#register').click();await page.waitForFunction(()=>document.getElementById('status').textContent==='E-postanı doğrula.');assert.equal(await page.locator('#profile').isVisible(),false);
+ await page.unroute('**/api/register');
+ for(const [id,path] of [['forgotPassword','forgot-password'],['resendVerification','request-verification']]){
+  await page.route('**/api/'+path,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,message:path+' gönderildi'})}));
+  await page.locator('#'+id).click();await page.waitForFunction(text=>document.getElementById('status').textContent===text,path+' gönderildi');await page.unroute('**/api/'+path);
+ }
+ await page.locator('#password').fill('browser-safe-password');await page.locator('#register').click();await page.waitForSelector('#profile:not(.hidden)');
  await page.locator('#title').fill('Tarayıcı remix testi');await page.locator('#audioFile').setInputFiles({name:'mix.wav',mimeType:'audio/wav',buffer:out});await page.locator('#rights').check();await page.locator('#publishBtn').click();await page.waitForSelector('.post audio');
  const likeButton=page.locator('.post button').filter({hasText:'♡'}).first();
  const likeResponse=page.waitForResponse(r=>r.url().includes('/likes')&&['POST','DELETE'].includes(r.request().method()));

@@ -14,8 +14,11 @@ function el(tag, text, cls) { const e=document.createElement(tag); if(text!==und
 function button(text, fn) { const b=el('button',text); b.type='button'; b.onclick=()=>run(b,fn); return b; }
 async function run(button, fn) {button.disabled=true;try{await fn();}catch(e){status(e.message);}finally{button.disabled=false;}}
 function session(value) {user=value; $('auth').classList.toggle('hidden',!!user); $('profile').classList.toggle('hidden',!user); if(user){$('profileName').value=user.name;$('bio').value=user.bio;} }
-async function authenticate(register) {const data={email:$('email').value,password:$('password').value,name:$('name').value}; const result=await api(register?'register':'login',json('POST',data));session(result.user);$('password').value='';status('Hoş geldin, '+user.name);await feed(true);}
+async function authenticate(register) {const data={email:$('email').value,password:$('password').value,name:$('name').value}; const result=await api(register?'register':'login',json('POST',data));session(result.user);$('password').value='';status(result.verification_required?result.message:'Hoş geldin, '+user.name);await feed(true);}
 $('authForm').onsubmit=e=>{e.preventDefault();run(e.submitter,()=>authenticate(false));};
+for(const [id,path] of [['forgotPassword','forgot-password'],['resendVerification','request-verification']]){
+  $(id).onclick=()=>run($(id),async()=>{if(!$('email').reportValidity())return;const result=await api(path,json('POST',{email:$('email').value}));status(result.message);});
+}
 $('register').onclick=()=>run($('register'),()=>authenticate(true));
 $('profileForm').onsubmit=e=>{e.preventDefault();run(e.submitter,async()=>{session((await api('profile',json('PATCH',{name:$('profileName').value,bio:$('bio').value}))).user);status('Profil kaydedildi.');await feed(true);});};
 $('logout').onclick=()=>run($('logout'),async()=>{await api('logout',{method:'POST'});session(null);status('Çıkış yaptın.');await feed(true);});

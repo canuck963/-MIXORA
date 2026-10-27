@@ -102,4 +102,60 @@ class API(unittest.TestCase):
         for _ in range(16):r=self.call('/api/login','POST',{'email':'a@example.com','password':'wrong-password'})
         self.assertEqual(r['status'],429)
 
+    def test_email_verification_blocks_session_until_verified(self):
+        from unittest.mock import patch
+        from urllib.parse import urlsplit, parse_qs
+        settings={'MIXORA_SMTP_HOST':'smtp.test','MIXORA_SMTP_FROM':'noreply@example.com','MIXORA_SMTP_USER':'test','MIXORA_SMTP_PASSWORD':'test'}
+        # Sessions created before email enforcement must also be rejected.
+        old_cookie,old_uid=self.register('old@example.com')
+        with patch.dict(os.environ,settings), patch.object(server,'send_email') as mail:
+            self.assertIsNone(self.call('/api/me',cookie=old_cookie)['body']['user'])
+            result=self.call('/api/register','POST',{'email':'new@example.com','password':'a-strong-password','name':'New DJ'})
+            self.assertTrue(result['body']['verification_required'])
+            self.assertNotIn('Set-Cookie',result['headers'])
+            credentials={'email':'new@example.com','password':'a-strong-password'}
+            self.assertEqual(self.call('/api/login','POST',credentials)['status'],403)
+            link=mail.call_args.args[2].splitlines()[-1]
+            url=urlsplit(link)
+            token=parse_qs(url.query)['token'][0]
+            with server.connect() as db:
+                self.assertFalse(db.execute('SELECT 1 FROM email_tokens WHERE token=?',(token,)).fetchone())
+            self.assertEqual(self.call(url.path+'?'+url.query)['status'],200)
+            self.assertEqual(self.call(url.path+'?'+url.query)['status'],400)
+            login=self.call('/api/login','POST',credentials)
+            self.assertEqual(login['status'],200)
+            self.assertIn('Set-Cookie',login['headers'])
+
+    def test_password_reset_is_single_use_and_revokes_sessions(self):
+        from unittest.mock import patch
+        cookie,uid=self.register()
+        with patch.object(server,'require_email_service'), patch.object(server,'send_email') as mail:
+            result=self.call('/api/forgot-password','POST',{'email':'a@example.com'})
+            self.assertEqual(result['status'],200)
+            raw=mail.call_args.args[2].split('token=')[1]
+            data={'token':raw,'password':'new-strong-password'}
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results=list(pool.map(lambda _:self.call('/api/reset-password','POST',data)['status'],range(2)))
+            self.assertEqual(sorted(results),[200,400])
+            self.assertEqual(self.call('/api/reset-password','POST',data)['status'],400)
+            self.assertIsNone(self.call('/api/me',cookie=cookie)['body']['user'])
+            self.assertEqual(self.call('/api/login','POST',{'email':'a@example.com','password':'a-strong-password'})['status'],401)
+            self.assertEqual(self.call('/api/login','POST',{'email':'a@example.com','password':'new-strong-password'})['status'],200)
+
+    def test_email_delivery_failure_rolls_back_and_missing_config_is_uniform(self):
+        from unittest.mock import patch
+        cookie,uid=self.register()
+        with patch.dict(os.environ,{'MIXORA_SMTP_HOST':''}):
+            for email in ['a@example.com','missing@example.com']:
+                self.assertEqual(self.call('/api/forgot-password','POST',{'email':email})['status'],503)
+        with patch.object(server,'require_email_service'), patch.object(server,'send_email',side_effect=OSError('offline')):
+            self.assertEqual(self.call('/api/forgot-password','POST',{'email':'a@example.com'})['status'],503)
+            with server.connect() as db:
+                self.assertEqual(db.execute('SELECT count(*) FROM email_tokens').fetchone()[0],0)
+        with patch.dict(os.environ,{'MIXORA_SMTP_HOST':'smtp.test'}), patch.object(server,'send_email',side_effect=OSError('offline')):
+            self.assertEqual(self.call('/api/register','POST',{'email':'failed@example.com','password':'a-strong-password','name':'DJ'})['status'],503)
+            with server.connect() as db:
+                self.assertIsNone(db.execute('SELECT id FROM users WHERE email=?',('failed@example.com',)).fetchone())
+
 if __name__=='__main__':unittest.main()
