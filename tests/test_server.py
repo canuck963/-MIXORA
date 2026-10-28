@@ -121,10 +121,34 @@ class API(unittest.TestCase):
             with server.connect() as db:
                 self.assertFalse(db.execute('SELECT 1 FROM email_tokens WHERE token=?',(token,)).fetchone())
             self.assertEqual(self.call(url.path+'?'+url.query)['status'],200)
-            self.assertEqual(self.call(url.path+'?'+url.query)['status'],400)
+            self.assertEqual(self.call(url.path+'?'+url.query)['status'],200)
+            self.assertEqual(self.call('/api/login','POST',credentials)['status'],403)
+            self.assertEqual(self.call(url.path,'POST',{'token':token},headers={'HTTP_ORIGIN':'https://evil.test'})['status'],403)
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results=list(pool.map(lambda _:self.call(url.path,'POST',{'token':token})['status'],range(2)))
+            self.assertEqual(sorted(results),[200,400])
+            self.assertEqual(self.call(url.path,'POST',{'token':token})['status'],400)
             login=self.call('/api/login','POST',credentials)
             self.assertEqual(login['status'],200)
             self.assertIn('Set-Cookie',login['headers'])
+
+    def test_verification_rejects_invalid_expired_and_wrong_purpose_tokens(self):
+        import hashlib
+        import time
+        _,uid=self.register()
+        with server.connect() as db:
+            for raw,purpose,expiry in [('expired','verify',time.time()-1),('reset-only','reset',time.time()+1800)]:
+                db.execute('INSERT INTO email_tokens VALUES(?,?,?,?)',(hashlib.sha256(raw.encode()).hexdigest(),uid,purpose,expiry))
+        for raw in ['', 'unknown', 'expired', 'reset-only', 'x'*257]:
+            self.assertEqual(self.call('/api/verify-email','POST',{'token':raw})['status'],400)
+        with server.connect() as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM verified_emails WHERE user_id=?',(uid,)).fetchone()[0],0)
+            self.assertEqual(db.execute('SELECT count(*) FROM email_tokens WHERE user_id=?',(uid,)).fetchone()[0],2)
+        page=self.call('/api/verify-email?token=unique-sensitive-token-456')
+        self.assertEqual(page['headers']['Referrer-Policy'],'no-referrer')
+        self.assertEqual(page['headers']['Cache-Control'],'no-store')
+        self.assertNotIn(b'unique-sensitive-token-456',page['body'])
 
     def test_password_reset_is_single_use_and_revokes_sessions(self):
         from unittest.mock import patch

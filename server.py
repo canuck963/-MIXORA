@@ -155,9 +155,12 @@ def route(env, db):
         public_origin=SECURE and ORIGIN != 'https://localhost:8000'
         return 200,{'ready_for_public_signup':bool(mail_ready and public_origin),'https':SECURE,'email_configured':bool(mail_ready)},headers
     if path == '/api/verify-email' and method == 'GET':
+        # Opening a link (including mail scanners) must never consume a token.
+        return 200,(ROOT / 'verify-email.html').read_bytes(),[('Content-Type','text/html; charset=utf-8')]
+    if path == '/api/verify-email' and method == 'POST':
+        raw=field(body(env),'token',256)
+        digest=hashlib.sha256(raw.encode()).hexdigest()
         db.execute('BEGIN IMMEDIATE')
-        token=parse_qs(env.get('QUERY_STRING','')).get('token',[''])[0]
-        digest=hashlib.sha256(token.encode()).hexdigest()
         record=db.execute("SELECT user_id FROM email_tokens WHERE token=? AND purpose='verify' AND expires>?",(digest,time.time())).fetchone()
         if not record: fail(400,'Doğrulama bağlantısı geçersiz veya süresi dolmuş.')
         db.execute('INSERT OR REPLACE INTO verified_emails VALUES(?,?)',(record['user_id'],time.time()))
@@ -330,7 +333,7 @@ def application(env,start_response):
         status,payload,headers=500,{'error':'Sunucu hatası. Tekrar dene.'},[]
     if not isinstance(payload,bytes):
         payload=json.dumps(payload,ensure_ascii=False).encode(); headers.append(('Content-Type','application/json; charset=utf-8'))
-    headers.extend([('Content-Length',str(len(payload))),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff'),('Referrer-Policy','same-origin'),('X-Frame-Options','DENY'),('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")])
+    headers.extend([('Content-Length',str(len(payload))),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff'),('Referrer-Policy','no-referrer'),('X-Frame-Options','DENY'),('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")])
     if SECURE: headers.append(('Strict-Transport-Security','max-age=31536000'))
     from http import HTTPStatus
     start_response(f'{status} {HTTPStatus(status).phrase}',headers)
