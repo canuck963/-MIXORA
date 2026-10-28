@@ -150,6 +150,10 @@ def route(env, db):
         limit(db,'ip:'+env.get('REMOTE_ADDR','unknown'),120)
     user,token=session(db,env)
     if path == '/api/health': return 200,{'ok':True},headers
+    if path == '/api/readiness' and method == 'GET':
+        mail_ready=all(os.environ.get(k) for k in ('MIXORA_SMTP_HOST','MIXORA_SMTP_FROM','MIXORA_SMTP_USER','MIXORA_SMTP_PASSWORD'))
+        public_origin=SECURE and ORIGIN != 'https://localhost:8000'
+        return 200,{'ready_for_public_signup':bool(mail_ready and public_origin),'https':SECURE,'email_configured':bool(mail_ready)},headers
     if path == '/api/verify-email' and method == 'GET':
         db.execute('BEGIN IMMEDIATE')
         token=parse_qs(env.get('QUERY_STRING','')).get('token',[''])[0]
@@ -199,6 +203,7 @@ def route(env, db):
             db.execute('INSERT INTO users(id,email,password,name) VALUES(?,?,?,?)',(uid,email,password_hash(password),name))
             row=db.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
             if os.environ.get('MIXORA_SMTP_HOST'):
+                require_email_service()
                 issue_email_token(db,row,'verify')
                 return 200,{'user':None,'verification_required':True,'message':'Hesabın oluşturuldu. E-postandaki bağlantıyla doğrula, ardından giriş yap.'},headers
         else:
