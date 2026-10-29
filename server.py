@@ -201,6 +201,7 @@ def route(env, db):
         if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email): fail(400,'Geçerli e-posta gerekli.')
         row=db.execute('SELECT * FROM users WHERE email=?',(email,)).fetchone()
         if path.endswith('register'):
+            if SECURE: require_email_service()
             if row: fail(409,'Bu e-posta kullanılamıyor.')
             uid=secrets.token_hex(16); name=field(data,'name',40)
             db.execute('INSERT INTO users(id,email,password,name) VALUES(?,?,?,?)',(uid,email,password_hash(password),name))
