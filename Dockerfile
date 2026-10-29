@@ -7,4 +7,4 @@ RUN mkdir -p /data && chown mixora:mixora /data
 USER mixora
 ENV MIXORA_DATA=/data
 EXPOSE 8000
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "2", "--timeout", "120", "--access-logfile", "-", "server:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "2", "--timeout", "120", "--access-logfile", "-", "server:application"]
