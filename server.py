@@ -203,7 +203,14 @@ def route(env, db):
                         reason = candidate
                 except (ValueError, UnicodeDecodeError, AttributeError, TypeError, IndexError):
                     pass
-                print('YouTube upstream HTTP rejection:', exc.code, 'reason:', reason, flush=True)
+                # Log a sanitized explanation for diagnosis, never the URL or credentials.
+                explanation = payload.get('error', {}).get('message', '') if isinstance(locals().get('payload'), dict) else ''
+                if isinstance(explanation, str):
+                    explanation = re.sub(r'AIza[A-Za-z0-9_-]+', '[REDACTED_KEY]', explanation)
+                    explanation = re.sub(r'https?://\\S+', '[REDACTED_URL]', explanation)[:180]
+                else:
+                    explanation = ''
+                print('YouTube upstream HTTP rejection:', exc.code, 'reason:', reason, 'detail:', explanation, flush=True)
                 return 503,{'error':'YouTube API erişimi reddedildi. API anahtarı, kısıtlamaları ve kotayı kontrol edin.','upstream_status':exc.code},headers
             return 502,{'error':'YouTube servisi geçici olarak yanıt vermiyor.','upstream_status':exc.code},headers
         except urllib.error.URLError as exc:
