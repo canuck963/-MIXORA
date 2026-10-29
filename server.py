@@ -188,6 +188,12 @@ def route(env, db):
         try:
             with urllib.request.urlopen(request,timeout=9) as response:
                 data=json.load(response)
+        except urllib.error.HTTPError as exc:
+            # Google provides actionable status codes (invalid key, quota, restrictions).
+            # Do not expose upstream payloads: they may contain request metadata.
+            if exc.code in (400, 401, 403):
+                return 503,{'error':'YouTube API erişimi reddedildi. API anahtarı, kısıtlamaları ve kotayı kontrol edin.','upstream_status':exc.code},headers
+            return 502,{'error':'YouTube servisi geçici olarak yanıt vermiyor.','upstream_status':exc.code},headers
         except (urllib.error.URLError,TimeoutError,ValueError):
             return 502,{'error':'YouTube arama servisine ulaşılamadı.'},headers
         items=[]
