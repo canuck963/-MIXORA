@@ -344,11 +344,20 @@ def route(env, db):
         try: offset=max(0,min(100000,int(params.get('offset',['0'])[0])))
         except ValueError: fail(400,'Geçersiz sayfa.')
         uid=user['id'] if user else ''
+        search=(params.get('q',[''])[0] or '').strip()[:100]
+        if search:
+            # Escape LIKE metacharacters so search input is treated literally.
+            pattern='%' + search.replace('\\','\\\\').replace('%','\\%').replace('_','\\_') + '%'
+            where="WHERE (p.title LIKE ? ESCAPE '\\' OR p.description LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\')"
+            bindings=(uid,pattern,pattern,pattern,offset)
+        else:
+            where=''
+            bindings=(uid,offset)
         rows=db.execute('''SELECT p.id,p.user_id,p.title,p.description,p.created,u.name,
           (SELECT count(*) FROM likes WHERE post_id=p.id) likes,
           EXISTS(SELECT 1 FROM likes WHERE post_id=p.id AND user_id=?) liked,
           (SELECT count(*) FROM comments WHERE post_id=p.id) comments
-          FROM posts p JOIN users u ON u.id=p.user_id ORDER BY p.created DESC LIMIT 20 OFFSET ?''',(uid,offset)).fetchall()
+          FROM posts p JOIN users u ON u.id=p.user_id '''+where+''' ORDER BY p.created DESC LIMIT 20 OFFSET ?''',bindings).fetchall()
         return 200,{'posts':[dict(r) for r in rows]},headers
     match=re.fullmatch(r'/api/(profiles|posts)/([a-f0-9]{32})(?:/(audio|likes|comments))?',path)
     if match:
