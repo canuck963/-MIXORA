@@ -152,12 +152,12 @@ window.addEventListener('pagehide',()=>{if(recorder&&recorder.state!=='inactive'
 .yt-result{background:#241a32;border:1px solid #ffffff22;border-radius:14px;padding:8px;text-align:left;overflow:hidden}
 .yt-result img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:9px}
 .yt-result strong{display:block;margin:8px 0 4px;font-size:13px}.yt-result small{color:#b9aeca}
-#youtubePlayer{margin-top:18px}#youtubePlayer iframe{display:block;width:100%;max-width:780px;aspect-ratio:16/9;border:0;border-radius:15px}
+#youtubeResults{background:linear-gradient(145deg,#21142f,#100e1d);border-color:#8c437c55;box-shadow:0 18px 45px #0005}#youtubeResults>h2{font-size:20px;letter-spacing:-.5px}#youtubeGrid{grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:12px}.yt-result{background:#ffffff08;border:1px solid #ffffff18;border-radius:17px;transition:border-color .2s,transform .2s}.yt-result:focus-visible{outline:2px solid #ff529b;outline-offset:2px}.yt-result[aria-pressed="true"]{border-color:#ff529b;background:#ff529b16}.yt-result img{border-radius:12px}.yt-result strong{font-size:13px;line-height:1.35}.yt-result small{font-size:12px}#youtubePlayer{margin-top:18px}#youtubePlayer:empty{display:none}.mixora-now{display:flex;align-items:center;gap:14px;padding:16px;margin-bottom:12px;border:1px solid #ffffff22;border-radius:18px;background:linear-gradient(110deg,#54214f,#241b41)}.mixora-now img{width:68px;height:68px;object-fit:cover;border-radius:12px;flex-shrink:0}.mixora-now div{min-width:0}.mixora-now .mixora-kicker{font-size:11px;font-weight:800;letter-spacing:1.5px;color:#ff9dc4;text-transform:uppercase}.mixora-now strong{display:block;font-size:17px;line-height:1.3;margin:5px 0;overflow-wrap:anywhere}.mixora-now small{color:#d6c7dd}#youtubePlayer iframe{display:block;width:100%;max-width:780px;aspect-ratio:16/9;border:0;border-radius:15px;background:#080710}#youtubeResults .notice{font-size:12px;color:#a99bb8}
 </style>
 <script>
 let ytController,ytSequence=0;
 const ytArea=document.createElement('section');ytArea.id='youtubeResults';ytArea.hidden=true;
-ytArea.innerHTML='<h2>🎬 Müzik videoları</h2><p class="muted" id="ytStatus" role="status">Sanatçı veya şarkı ara.</p><div id="youtubeGrid"></div><div id="youtubePlayer"></div><p class="notice">Videolar resmî YouTube oynatıcısıyla gösterilir. Arama için YouTube API erişimi gerekir.</p>';
+ytArea.innerHTML='<h2>🎧 MIXORA · Müzik keşfi</h2><p class="muted" id="ytStatus" role="status">Sanatçı veya şarkı ara.</p><div id="youtubeGrid"></div><div id="youtubePlayer"></div><p class="notice">Videolar resmî YouTube oynatıcısıyla gösterilir. Arama için YouTube API erişimi gerekir.</p>';
 document.querySelector('#home .hero').after(ytArea);
 async function searchVideos(raw){
  const q=raw.trim(),seq=++ytSequence;
@@ -177,7 +177,21 @@ async function searchVideos(raw){
    const title=document.createElement('strong');title.textContent=v.title;
    const channel=document.createElement('small');channel.textContent=v.channel;
    b.append(img,title,channel);
-   b.onclick=()=>{const frame=document.createElement('iframe');frame.src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(v.id)+'?autoplay=1';frame.title=v.title;frame.allow='accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; web-share';frame.allowFullscreen=true;document.getElementById('youtubePlayer').replaceChildren(frame);frame.scrollIntoView({behavior:'smooth',block:'center'})};
+   b.setAttribute('aria-pressed','false');
+   b.onclick=()=>{
+    grid.querySelectorAll('.yt-result').forEach(item=>item.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true');
+    const panel=document.createElement('div');panel.className='mixora-now';
+    const art=document.createElement('img');art.src=v.thumbnail;art.alt='';art.referrerPolicy='no-referrer';
+    const info=document.createElement('div');
+    const kicker=document.createElement('span');kicker.className='mixora-kicker';kicker.textContent='MIXORA · Şimdi çalıyor';
+    const name=document.createElement('strong');name.textContent=v.title;
+    const artist=document.createElement('small');artist.textContent=v.channel;
+    info.append(kicker,name,artist);panel.append(art,info);
+    const frame=document.createElement('iframe');frame.src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(v.id)+'?autoplay=1';frame.title=v.title+' · YouTube oynatıcı';frame.referrerPolicy='strict-origin-when-cross-origin';frame.allow='accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; web-share';frame.allowFullscreen=true;
+    document.getElementById('youtubePlayer').replaceChildren(panel,frame);
+    panel.scrollIntoView({behavior:'smooth',block:'center'});
+   };
    grid.append(b);
   }
  }catch(err){if(err.name!=='AbortError'&&seq===ytSequence)document.getElementById('ytStatus').textContent=err.message}
