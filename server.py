@@ -7,6 +7,8 @@ from pathlib import Path
 import re
 import secrets
 import smtplib
+import urllib.request
+import urllib.error
 from email.message import EmailMessage
 from urllib.parse import quote
 import sqlite3
@@ -111,7 +113,7 @@ def session(db, env):
     token=cookie.get('mixora_session')
     digest=hashlib.sha256(token.value.encode()).hexdigest() if token else ''
     row=db.execute('SELECT users.* FROM sessions JOIN users ON users.id=sessions.user_id WHERE token=? AND expires>?',(digest,time.time())).fetchone()
-    if row and os.environ.get('MIXORA_SMTP_HOST') and not db.execute('SELECT 1 FROM verified_emails WHERE user_id=?',(row['id'],)).fetchone():
+    if row and email_configured() and not db.execute('SELECT 1 FROM verified_emails WHERE user_id=?',(row['id'],)).fetchone():
         return None,digest
     return row,digest
 
@@ -121,12 +123,24 @@ def audio_type(data):
     if data[4:8] == b'ftyp' and data[8:12] in (b'M4A ',b'isom',b'mp42'): return 'audio/mp4'
     fail(415,'MP3, WAV veya M4A ses dosyası gerekli.')
 
+def email_configured():
+    api_ready = bool(os.environ.get('BREVO_API_KEY') and os.environ.get('MIXORA_SMTP_FROM'))
+    smtp_ready = all(os.environ.get(key) for key in ('MIXORA_SMTP_HOST','MIXORA_SMTP_FROM','MIXORA_SMTP_USER','MIXORA_SMTP_PASSWORD'))
+    return api_ready or smtp_ready
+
 def require_email_service():
-    if not all(os.environ.get(key) for key in ('MIXORA_SMTP_HOST','MIXORA_SMTP_FROM','MIXORA_SMTP_USER','MIXORA_SMTP_PASSWORD')):
+    if not email_configured():
         fail(503,'E-posta servisi yapılandırılmadı.')
 
 def send_email(to, subject, message):
     require_email_service()
+    if os.environ.get('BREVO_API_KEY'):
+        payload=json.dumps({'sender':{'name':'MIXORA','email':os.environ['MIXORA_SMTP_FROM']},'to':[{'email':to}],'subject':subject,'textContent':message}).encode('utf-8')
+        req=urllib.request.Request('https://api.brevo.com/v3/smtp/email',data=payload,headers={'api-key':os.environ['BREVO_API_KEY'],'Content-Type':'application/json','Accept':'application/json'},method='POST')
+        with urllib.request.urlopen(req,timeout=12) as response:
+            if response.status not in (200,201,202):
+                raise OSError('Brevo e-posta isteği başarısız')
+        return
     host=os.environ.get('MIXORA_SMTP_HOST')
     sender=os.environ.get('MIXORA_SMTP_FROM')
     if not host or not sender:
@@ -151,7 +165,7 @@ def issue_email_token(db, row, purpose):
     link=ORIGIN+'/api/'+endpoint+'?token='+quote(raw)
     try:
         send_email(row['email'],'MIXORA e-posta işlemi','Bu işlemi sen başlattıysan 30 dakika içinde bağlantıyı aç:\n'+link)
-    except (OSError, smtplib.SMTPException):
+    except (OSError, smtplib.SMTPException, urllib.error.HTTPError):
         fail(503,'E-posta gönderilemedi. Daha sonra tekrar dene.')
     return {'ok':True}
 
@@ -164,7 +178,7 @@ def route(env, db):
     user,token=session(db,env)
     if path == '/api/health': return 200,{'ok':True},headers
     if path == '/api/readiness' and method == 'GET':
-        mail_ready=all(os.environ.get(k) for k in ('MIXORA_SMTP_HOST','MIXORA_SMTP_FROM','MIXORA_SMTP_USER','MIXORA_SMTP_PASSWORD'))
+        mail_ready=email_configured()
         public_origin=SECURE and ORIGIN != 'https://localhost:8000'
         return 200,{'ready_for_public_signup':bool(mail_ready and public_origin),'https':SECURE,'email_configured':bool(mail_ready)},headers
     if path == '/api/verify-email' and method == 'GET':
@@ -219,7 +233,7 @@ def route(env, db):
             uid=secrets.token_hex(16); name=field(data,'name',40)
             db.execute('INSERT INTO users(id,email,password,name) VALUES(?,?,?,?)',(uid,email,password_hash(password),name))
             row=db.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
-            if os.environ.get('MIXORA_SMTP_HOST'):
+            if email_configured():
                 require_email_service()
                 issue_email_token(db,row,'verify')
                 return 200,{'user':None,'verification_required':True,'message':'Hesabın oluşturuldu. E-postandaki bağlantıyla doğrula, ardından giriş yap.'},headers
@@ -227,7 +241,7 @@ def route(env, db):
             stored=row['password'] if row else password_hash('dummy-password')
             valid=hmac.compare_digest(stored,password_hash(password,stored.split(':')[0]))
             if not row or not valid: fail(401,'E-posta veya şifre hatalı.')
-            if os.environ.get('MIXORA_SMTP_HOST') and not db.execute('SELECT 1 FROM verified_emails WHERE user_id=?',(row['id'],)).fetchone(): fail(403,'E-posta doğrulaması gerekli.')
+            if email_configured() and not db.execute('SELECT 1 FROM verified_emails WHERE user_id=?',(row['id'],)).fetchone(): fail(403,'E-posta doğrulaması gerekli.')
         raw=secrets.token_urlsafe(32); digest=hashlib.sha256(raw.encode()).hexdigest()
         db.execute('DELETE FROM sessions WHERE expires<?',(time.time(),))
         if token: db.execute('DELETE FROM sessions WHERE token=?',(token,))
