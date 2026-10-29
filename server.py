@@ -413,7 +413,7 @@ def application(env,start_response):
         status,payload,headers=500,{'error':'Sunucu hatası. Tekrar dene.'},[]
     if not isinstance(payload,bytes):
         payload=json.dumps(payload,ensure_ascii=False).encode(); headers.append(('Content-Type','application/json; charset=utf-8'))
-    headers.extend([('Content-Length',str(len(payload))),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff'),('Referrer-Policy','no-referrer'),('X-Frame-Options','DENY'),('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data: https://i.ytimg.com https://*.ytimg.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")])
+    headers.extend([('Content-Length',str(len(payload))),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff'),('Referrer-Policy','strict-origin-when-cross-origin'),('X-Frame-Options','DENY'),('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data: https://i.ytimg.com https://*.ytimg.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")])
     if SECURE: headers.append(('Strict-Transport-Security','max-age=31536000'))
     from http import HTTPStatus
     start_response(f'{status} {HTTPStatus(status).phrase}',headers)
