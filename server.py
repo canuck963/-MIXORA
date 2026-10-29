@@ -221,8 +221,7 @@ def route(env, db):
         db.execute('DELETE FROM email_tokens WHERE token=?',(digest,))
         return 200,{'ok':True,'message':'E-posta doğrulandı. Giriş yapabilirsin.'},headers
     if path == '/api/reset-password' and method == 'GET':
-        page="""<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MIXORA - Şifre yenile</title><body style="background:#10101b;color:white;font:18px system-ui;max-width:460px;margin:60px auto;padding:20px"><h1>MIXORA</h1><h2>Yeni şifre belirle</h2><form id="reset"><input id="password" type="password" minlength="10" maxlength="128" required placeholder="Yeni şifre (en az 10 karakter)" style="width:100%;padding:14px;box-sizing:border-box"><button style="padding:14px;margin-top:15px">Şifreyi yenile</button></form><p id="result"></p><script>document.querySelector('#reset').addEventListener('submit',async e=>{e.preventDefault();const token=new URLSearchParams(location.search).get('token');const r=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,password:document.querySelector('#password').value})});const d=await r.json();document.querySelector('#result').textContent=r.ok?'Şifren değiştirildi. Şimdi giriş yapabilirsin.':(d.error||'İşlem başarısız.');});</script></body></html>"""
-        return 200,page.encode('utf-8'),[('Content-Type','text/html; charset=utf-8')]
+        return 200,(ROOT / 'reset-password.html').read_bytes(),[('Content-Type','text/html; charset=utf-8')]
     if path == '/api/reset-password' and method == 'POST':
         limit(db,'reset:'+env.get('REMOTE_ADDR','unknown'),5,3600)
         data=body(env)
