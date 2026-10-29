@@ -10,7 +10,7 @@ import smtplib
 import urllib.request
 import urllib.error
 from email.message import EmailMessage
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 import sqlite3
 import time
 from http.cookies import SimpleCookie
@@ -176,6 +176,27 @@ def route(env, db):
         if env.get('HTTP_ORIGIN') != ORIGIN: fail(403,'Kaynak doğrulaması başarısız.')
         limit(db,'ip:'+env.get('REMOTE_ADDR','unknown'),120)
     user,token=session(db,env)
+    if path == '/api/youtube/search' and method == 'GET':
+        key=os.environ.get('YOUTUBE_API_KEY','')
+        if not key: return 503,{'error':'YouTube araması için YOUTUBE_API_KEY ayarlanmalı.'},headers
+        params=parse_qs(env.get('QUERY_STRING',''))
+        q=params.get('q',[''])[0].strip()[:100]
+        if len(q)<2: fail(400,'En az iki karakter yaz.')
+        limit(db,'youtube:'+env.get('REMOTE_ADDR','unknown'),40)
+        query=urlencode({'part':'snippet','type':'video','videoEmbeddable':'true','videoSyndicated':'true','videoCategoryId':'10','maxResults':'12','q':q,'key':key})
+        request=urllib.request.Request('https://www.googleapis.com/youtube/v3/search?'+query,headers={'Accept':'application/json'})
+        try:
+            with urllib.request.urlopen(request,timeout=9) as response:
+                data=json.load(response)
+        except (urllib.error.URLError,TimeoutError,ValueError):
+            return 502,{'error':'YouTube arama servisine ulaşılamadı.'},headers
+        items=[]
+        for entry in data.get('items',[]):
+            video_id=entry.get('id',{}).get('videoId','')
+            snippet=entry.get('snippet',{})
+            if re.fullmatch(r'[a-zA-Z0-9_-]{11}',video_id):
+                items.append({'id':video_id,'title':snippet.get('title',''),'channel':snippet.get('channelTitle',''),'thumbnail':snippet.get('thumbnails',{}).get('medium',{}).get('url','')})
+        return 200,{'items':items},headers
     if path == '/api/health': return 200,{'ok':True},headers
     if path == '/api/readiness' and method == 'GET':
         mail_ready=email_configured()
@@ -361,7 +382,7 @@ def application(env,start_response):
         status,payload,headers=500,{'error':'Sunucu hatası. Tekrar dene.'},[]
     if not isinstance(payload,bytes):
         payload=json.dumps(payload,ensure_ascii=False).encode(); headers.append(('Content-Type','application/json; charset=utf-8'))
-    headers.extend([('Content-Length',str(len(payload))),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff'),('Referrer-Policy','no-referrer'),('X-Frame-Options','DENY'),('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")])
+    headers.extend([('Content-Length',str(len(payload))),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff'),('Referrer-Policy','no-referrer'),('X-Frame-Options','DENY'),('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data: https://i.ytimg.com https://*.ytimg.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")])
     if SECURE: headers.append(('Strict-Transport-Security','max-age=31536000'))
     from http import HTTPStatus
     start_response(f'{status} {HTTPStatus(status).phrase}',headers)
