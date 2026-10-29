@@ -192,6 +192,8 @@ def route(env, db):
             # Google provides actionable status codes (invalid key, quota, restrictions).
             # Do not expose upstream payloads: they may contain request metadata.
             if exc.code in (400, 401, 403):
+                # Status only; never log the request URL, credentials or response body.
+                print('YouTube upstream HTTP rejection:', exc.code, flush=True)
                 return 503,{'error':'YouTube API erişimi reddedildi. API anahtarı, kısıtlamaları ve kotayı kontrol edin.','upstream_status':exc.code},headers
             return 502,{'error':'YouTube servisi geçici olarak yanıt vermiyor.','upstream_status':exc.code},headers
         except urllib.error.URLError as exc:
