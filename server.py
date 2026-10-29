@@ -183,7 +183,7 @@ def route(env, db):
         q=params.get('q',[''])[0].strip()[:100]
         if len(q)<2: fail(400,'En az iki karakter yaz.')
         limit(db,'youtube:'+env.get('REMOTE_ADDR','unknown'),40)
-        query=urlencode({'part':'snippet','type':'video','videoEmbeddable':'true','videoSyndicated':'true','videoCategoryId':'10','maxResults':'12','q':q,'key':key})
+        query=urlencode({'part':'snippet','type':'video','videoEmbeddable':'true','maxResults':'12','q':q,'key':key})
         request=urllib.request.Request('https://www.googleapis.com/youtube/v3/search?'+query,headers={'Accept':'application/json'})
         try:
             with urllib.request.urlopen(request,timeout=9) as response:
