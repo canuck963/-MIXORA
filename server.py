@@ -39,7 +39,20 @@ def connect():
 
 def initialize():
     DATA.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # Multiple Gunicorn workers can initialize simultaneously on startup.
+    # Retry transient SQLite writer locks instead of crashing the worker.
+    for attempt in range(8):
+        try:
+            _initialize_schema()
+            return
+        except sqlite3.OperationalError as exc:
+            if 'locked' not in str(exc).lower() or attempt == 7:
+                raise
+            time.sleep(min(0.25 * (2 ** attempt), 3))
+
+def _initialize_schema():
     with connect() as db:
+        db.execute('PRAGMA busy_timeout=20000')
         db.execute('PRAGMA journal_mode=WAL')
         db.executescript('''
         CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,email TEXT UNIQUE NOT NULL,password TEXT NOT NULL,name TEXT NOT NULL,bio TEXT NOT NULL DEFAULT '');
