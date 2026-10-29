@@ -193,7 +193,17 @@ def route(env, db):
             # Do not expose upstream payloads: they may contain request metadata.
             if exc.code in (400, 401, 403):
                 # Status only; never log the request URL, credentials or response body.
-                print('YouTube upstream HTTP rejection:', exc.code, flush=True)
+                # Extract only Google's documented machine-readable reason, not its message or URL.
+                reason = 'unknown'
+                try:
+                    payload = json.loads(exc.read(8192).decode('utf-8'))
+                    errors = payload.get('error', {}).get('errors', [])
+                    candidate = errors[0].get('reason', '') if errors else ''
+                    if isinstance(candidate, str) and re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', candidate):
+                        reason = candidate
+                except (ValueError, UnicodeDecodeError, AttributeError, TypeError, IndexError):
+                    pass
+                print('YouTube upstream HTTP rejection:', exc.code, 'reason:', reason, flush=True)
                 return 503,{'error':'YouTube API erişimi reddedildi. API anahtarı, kısıtlamaları ve kotayı kontrol edin.','upstream_status':exc.code},headers
             return 502,{'error':'YouTube servisi geçici olarak yanıt vermiyor.','upstream_status':exc.code},headers
         except urllib.error.URLError as exc:
