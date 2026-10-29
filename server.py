@@ -194,8 +194,14 @@ def route(env, db):
             if exc.code in (400, 401, 403):
                 return 503,{'error':'YouTube API erişimi reddedildi. API anahtarı, kısıtlamaları ve kotayı kontrol edin.','upstream_status':exc.code},headers
             return 502,{'error':'YouTube servisi geçici olarak yanıt vermiyor.','upstream_status':exc.code},headers
-        except (urllib.error.URLError,TimeoutError,ValueError):
-            return 502,{'error':'YouTube arama servisine ulaşılamadı.'},headers
+        except urllib.error.URLError as exc:
+            # Log only the exception class and a bounded network reason; never log the API key or request URL.
+            reason = getattr(exc, 'reason', None)
+            print('YouTube upstream network failure:', type(reason).__name__ if reason else type(exc).__name__, flush=True)
+            return 502,{'error':'YouTube arama servisine ulaşılamadı. Sunucu ağ bağlantısını kontrol edin.'},headers
+        except (TimeoutError,ValueError) as exc:
+            print('YouTube upstream response failure:', type(exc).__name__, flush=True)
+            return 502,{'error':'YouTube arama servisi zaman aşımına uğradı veya geçersiz yanıt verdi.'},headers
         items=[]
         for entry in data.get('items',[]):
             video_id=entry.get('id',{}).get('videoId','')
