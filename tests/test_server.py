@@ -28,6 +28,11 @@ class API(unittest.TestCase):
         self.assertEqual(r['status'],200,r)
         return r['headers']['Set-Cookie'].split(';')[0],r['body']['user']['id']
     def setUp(self):
+        # Never let integration tests inherit a real delivery provider.
+        from unittest.mock import patch
+        mail_env=patch.dict(os.environ,{key:'' for key in ('BREVO_API_KEY','MIXORA_SMTP_HOST','MIXORA_SMTP_FROM','MIXORA_SMTP_USER','MIXORA_SMTP_PASSWORD')})
+        mail_env.start()
+        self.addCleanup(mail_env.stop)
         with server.connect() as db:
             for table in ['comments','likes','posts','sessions','users','limits']:db.execute('DELETE FROM '+table)
     def post(self,cookie):
@@ -150,6 +155,24 @@ class API(unittest.TestCase):
         self.assertEqual(page['headers']['Cache-Control'],'no-store')
         self.assertNotIn(b'unique-sensitive-token-456',page['body'])
 
+    def test_reset_page_get_does_not_consume_token(self):
+        import hashlib,time
+        _,uid=self.register()
+        digest=hashlib.sha256(b'reset-page-token').hexdigest()
+        with server.connect() as db:
+            db.execute('INSERT INTO email_tokens VALUES(?,?,?,?)',(digest,uid,'reset',time.time()+1800))
+        for _ in range(2):
+            response=self.call('/api/reset-password?token=reset-page-token')
+            self.assertEqual(response['status'],200)
+            self.assertEqual(response['headers']['Cache-Control'],'no-store')
+            self.assertEqual(response['headers']['Referrer-Policy'],'no-referrer')
+            self.assertIn(b'autocomplete="new-password"',response['body'])
+            self.assertNotIn(b'reset-page-token',response['body'])
+        with server.connect() as db:
+            self.assertIsNotNone(db.execute('SELECT token FROM email_tokens WHERE token=?',(digest,)).fetchone())
+        result=self.call('/api/reset-password','POST',{'token':'reset-page-token','password':'new-safe-password'})
+        self.assertEqual(result['status'],200)
+
     def test_password_reset_is_single_use_and_revokes_sessions(self):
         from unittest.mock import patch
         cookie,uid=self.register()
@@ -177,7 +200,7 @@ class API(unittest.TestCase):
             self.assertEqual(self.call('/api/forgot-password','POST',{'email':'a@example.com'})['status'],503)
             with server.connect() as db:
                 self.assertEqual(db.execute('SELECT count(*) FROM email_tokens').fetchone()[0],0)
-        with patch.dict(os.environ,{'MIXORA_SMTP_HOST':'smtp.test'}), patch.object(server,'send_email',side_effect=OSError('offline')):
+        with patch.dict(os.environ,{'MIXORA_SMTP_HOST':'smtp.test','MIXORA_SMTP_FROM':'test@example.com','MIXORA_SMTP_USER':'test','MIXORA_SMTP_PASSWORD':'test-only'}), patch.object(server,'send_email',side_effect=OSError('offline')):
             self.assertEqual(self.call('/api/register','POST',{'email':'failed@example.com','password':'a-strong-password','name':'DJ'})['status'],503)
             with server.connect() as db:
                 self.assertIsNone(db.execute('SELECT id FROM users WHERE email=?',('failed@example.com',)).fetchone())

@@ -21,6 +21,23 @@ function wav(hz){const n=44100*2,b=Buffer.alloc(44+n*2);b.write('RIFF');b.writeU
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await page.goto('http://localhost:8000/api/verify-email');assert.equal(await page.locator('#confirm').isDisabled(),true);
  await page.unroute('**/api/verify-email');
+ let resetRequests=0;
+ await page.route('**/api/reset-password',async route=>{
+  if(route.request().method()!=='POST')return route.continue();
+  resetRequests++;assert.equal(route.request().postDataJSON().token,'reset-browser-token');
+  if(resetRequests===1)return route.abort();
+  return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true})});
+ });
+ await page.goto('http://localhost:8000/api/reset-password?token=reset-browser-token');
+ assert.equal(resetRequests,0);assert.equal(new URL(page.url()).search,'');
+ await page.getByLabel('Yeni şifre',{exact:true}).fill('new-browser-password');
+ await page.locator('#confirm').click();await page.waitForFunction(()=>document.getElementById('result').textContent.includes('Yanıt alınamadı'));
+ assert.equal(await page.locator('#confirm').isEnabled(),true);
+ await page.locator('#confirm').click();await page.waitForFunction(()=>document.getElementById('result').textContent.includes('Şifren değiştirildi'));
+ assert.equal(resetRequests,2);assert.equal(await page.locator('#confirm').isDisabled(),true);assert.equal(await page.locator('#password').inputValue(),'');
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.goto('http://localhost:8000/api/reset-password');assert.equal(await page.locator('#confirm').isDisabled(),true);
+ await page.unroute('**/api/reset-password');
  await page.goto('http://localhost:8000/Remix.html');
  for(const id of ['A','B']){await page.locator('#file'+id).setInputFiles({name:id+'.wav',mimeType:'audio/wav',buffer:wav(id==='A'?220:440)});await page.waitForFunction(id=>document.getElementById('name'+id).textContent.includes('.wav'),id);}
  await page.locator('#startA').fill('0.25');await page.locator('#endA').fill('1.75');await page.locator('#startB').fill('0.5');
