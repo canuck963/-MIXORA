@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>MIXORA — E-postanı doğrula</title>
+  <style>
+    body{background:#10101b;color:#fff;font:18px system-ui;max-width:460px;margin:48px auto;padding:20px}
+    button,a{font:inherit}button{padding:16px;border:0;border-radius:12px;background:#c6a5ff;color:#171023;cursor:pointer;width:100%}
+    button:disabled{opacity:.6;cursor:default}a{color:#d6bfff}p{line-height:1.6}
+    :focus-visible{outline:3px solid #fff;outline-offset:4px}
+  </style>
+</head>
+<body>
+  <h1>MIXORA</h1>
+  <h2>E-postanı doğrula</h2>
+  <p>Hesabını etkinleştirmek için aşağıdaki düğmeye bas. Bağlantıyı açmak tek başına hesabını doğrulamaz.</p>
+  <form id="verify"><button id="confirm" type="submit">E-postamı doğrula</button></form>
+  <p id="result" role="status" aria-live="polite"></p>
+  <p><a href="/community.html">Giriş yap / yeni doğrulama bağlantısı iste</a></p>
+  <script>
+    const token=new URLSearchParams(location.search).get('token');
+    const form=document.getElementById('verify'),button=document.getElementById('confirm'),result=document.getElementById('result');
+    // Keep the secret out of subsequent navigation and browser history entries.
+    history.replaceState(null,'',location.pathname);
+    if(!token){button.disabled=true;result.textContent='Doğrulama bağlantısı eksik. E-postandaki bağlantıyı aç veya yeni bağlantı iste.';}
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();if(button.disabled)return;
+      button.disabled=true;form.setAttribute('aria-busy','true');result.textContent='Doğrulanıyor…';
+      try{
+        const response=await fetch('/api/verify-email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
+        const data=await response.json();
+        result.textContent=response.ok?'E-posta doğrulandı. Şimdi giriş yapabilirsin.':(data.error||'Doğrulama başarısız. Tekrar dene.');
+        button.disabled=response.ok||response.status===400;
+      }catch(error){result.textContent='Sunucuya ulaşılamadı. Bağlantını kontrol edip tekrar dene.';button.disabled=false;}
+      finally{form.removeAttribute('aria-busy');}
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+name: MIXORA checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: python -m unittest discover -s tests -v
+      - run: node --test tests/mix-core.test.cjs
+      - run: node tests/syntax.cjs
+      - run: npm install --no-save playwright@1.62.1
+      - run: npx playwright install --with-deps chromium webkit
+      - run: |
+          python server.py > /tmp/mixora-server.log 2>&1 &
+          for i in $(seq 1 20); do curl -fsS http://localhost:8000/api/health && break || sleep 1; done
+          node tests/browser.cjs
