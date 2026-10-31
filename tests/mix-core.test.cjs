@@ -19,3 +19,45 @@ test('suggestions preserve selected phrases without adding synthetic effects',()
  for(const A of [{start:-1,end:3},{start:2,end:121},{start:3,end:2},{start:NaN,end:3},{start:1,end:1.1}])assert.throws(()=>suggestions(120,90,{...ranges,A}));
  assert.throws(()=>suggestions(120,90,{}));
 });
+
+const {estimateTempo} = require('../assets/tempo.js');
+function clickTrack(rate, times) {
+  const left = new Float32Array(rate * 12);
+  const right = new Float32Array(left.length);
+  for (const t of times) right.fill(0.7, Math.round(t * rate), Math.round((t + 0.04) * rate));
+  return {sampleRate: rate, length: left.length, numberOfChannels: 2,
+    getChannelData: i => i === 0 ? left : right};
+}
+test('measures selected stereo pulse at different sample rates', () => {
+  for (const rate of [44100, 48000]) for (const bpm of [72, 100, 128, 160]) {
+    const times = Array.from({length: 16}, (_, i) => 4.1 + i * 60 / bpm);
+    const buffer = clickTrack(rate, times);
+    assert.ok(Math.abs(estimateTempo(buffer, 4, 12) - bpm) <= 1);
+    assert.equal(estimateTempo(buffer, 0, 4), null);
+    assert.equal(estimateTempo(buffer, 4, 6), null);
+  }
+});
+test('declines irregular transients and isolated attacks', () => {
+  for (const times of [[1], [0.2, 0.57, 1.32, 1.55, 2.45, 3.01, 3.22, 4.06]]) {
+    assert.equal(estimateTempo(clickTrack(44100, times), 0, 10), null);
+  }
+});
+
+test('both studio pages bind the A and B controls to their selection and decoded audio', () => {
+  const fs = require('node:fs'), vm = require('node:vm');
+  for (const [page, selector] of [['Remix.html', 'sel'], ['remix.html', 'selection']]) {
+    const html = fs.readFileSync(page, 'utf8');
+    const controls = Object.fromEntries([...html.matchAll(/<button[^>]+id="(tempo[AB])"/g)].map(m => [m[1], {}]));
+    const buffer = clickTrack(44100, Array.from({length: 16}, (_, i) => 4.1 + i / 2));
+    let message;
+    const scope = vm.createContext({$: id => controls[id], tracks: {A: {buffer}, B: {buffer}},
+      [selector]: id => id === 'A' ? {start: 4, end: 12} : {start: 0, end: 4}, note: value => {message = value;}});
+    vm.runInContext(fs.readFileSync('assets/tempo.js', 'utf8'), scope);
+    const binding = html.match(/<script src="assets\/tempo.js"><\/script><script>([^<]+)<\/script>/);
+    vm.runInContext(binding[1], scope);
+    controls.tempoA.onclick();
+    assert.match(message, /^A .*120 BPM/);
+    controls.tempoB.onclick();
+    assert.match(message, /^B .*belirsiz/);
+  }
+});
