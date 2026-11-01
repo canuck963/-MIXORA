@@ -1,5 +1,5 @@
 // Estimate the pulse from regularly spaced energy attacks in a bounded excerpt.
-function estimateTempo(buffer, start, end) {
+function analyzePulse(buffer, start, end) {
   const rate = buffer.sampleRate;
   const first = Math.ceil(start * rate);
   const last = Math.min(buffer.length, Math.floor(Math.min(end, start + 30) * rate));
@@ -39,9 +39,30 @@ function estimateTempo(buffer, start, end) {
   const consistent = intervals.filter(interval => Math.abs(interval - period) <= period * 0.08);
   if (bpm < 60 || bpm > 180 || consistent.length < intervals.length * 0.8) return null;
   // Average consistent gaps to reduce rounding error from the 10 ms frame grid.
-  return Math.round(60 * consistent.length / consistent.reduce((sum, gap) => sum + gap, 0));
+  const measured = Math.round(60 * consistent.length / consistent.reduce((sum, gap) => sum + gap, 0));
+  if (measured < 60 || measured > 180) return null;
+  // An isolated transient may fall between beats. Require regular gaps on both sides.
+  const regularGap = gap => Math.abs(gap - period) <= period * 0.08;
+  const beats = peaks.filter((_, i) => regularGap(intervals[i - 1]) && regularGap(intervals[i]))
+    .map(peak => (first + peak * frame) / rate);
+  return {bpm: measured, beats};
 }
-if (typeof module === 'object') module.exports = {estimateTempo};
+function estimateTempo(buffer, start, end) {
+  return analyzePulse(buffer, start, end)?.bpm ?? null;
+}
+
+function alignOverlayEntry(buffer, start, end, delay) {
+  const target = start + delay;
+  const pulse = analyzePulse(buffer, Math.max(start, target - 5), Math.min(end, target + 5));
+  if (!pulse) return null;
+  let nearest = null;
+  for (const beat of pulse.beats) {
+    const distance = Math.abs(beat - target);
+    if (distance <= 30 / pulse.bpm && (nearest === null || distance < Math.abs(nearest - target))) nearest = beat;
+  }
+  return nearest === null ? null : nearest - start;
+}
+if (typeof module === 'object') module.exports = {estimateTempo, alignOverlayEntry};
 
 function bindTempoControls(selectRange) {
   for (const id of ['A', 'B']) {

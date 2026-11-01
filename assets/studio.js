@@ -6,7 +6,18 @@ document.querySelector('main').append(studioPanel);
 const suggestionNames=['Duygusal','Enerjik','Sinematik'];
 function selectedSuggestion(i){
   const ranges={};for(const id of ['A','B'])ranges[id]={start:Number($('start'+id).value),end:Number($('end'+id).value)};
-  return MixCore.suggestions(tracks.A?.buffer.duration,tracks.B?.buffer.duration,ranges)[i];
+  const suggestion = MixCore.suggestions(tracks.A?.buffer.duration, tracks.B?.buffer.duration, ranges)[i];
+  const entry = suggestion.clips.find(clip => clip.overlay);
+  if (entry) {
+    const delay = alignOverlayEntry(tracks.A.buffer, ranges.A.start, ranges.A.end, entry.delay);
+    if (delay === null) {
+      suggestion.description += ' Düzenli vuruş bulunamadı, varsayılan giriş kullanıldı.';
+    } else {
+      entry.delay = delay;
+      suggestion.description += ' B girişi A’daki yakın bir vuruşa hizalandı.';
+    }
+  }
+  return suggestion;
 }
 for(let i=0;i<3;i++){
   const card=document.createElement('div');card.className='suggestion-card';

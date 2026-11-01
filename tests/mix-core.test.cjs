@@ -61,3 +61,24 @@ test('both studio pages bind the A and B controls to their selection and decoded
     assert.match(message, /^B .*belirsiz/);
   }
 });
+
+test('cinematic preview and apply use the same nearby observed beat or the original delay', () => {
+  const fs = require('node:fs'), vm = require('node:vm');
+  const studio = fs.readFileSync('assets/studio.js', 'utf8');
+  const select = studio.slice(studio.indexOf('function selectedSuggestion'), studio.indexOf('for(let i=0;i<3;i++)'));
+  const range = {startA: 2, endA: 12, startB: 1, endB: 9};
+  for (const regular of [true, false]) {
+    const times = regular ? Array.from({length: 20}, (_, i) => 2.16 + i / 2) : [];
+    const buffer = {...clickTrack(48000, times), duration: 12};
+    const context = vm.createContext({tracks: {A: {buffer}, B: {buffer}}, $: id => ({value: range[id]}),
+      MixCore: {suggestions}, alignOverlayEntry: require('../assets/tempo.js').alignOverlayEntry});
+    vm.runInContext(select, context);
+    const result = context.selectedSuggestion(2);
+    assert.ok(Math.abs(result.clips[1].delay - (regular ? 4.16 : 4)) < 0.011);
+    assert.match(result.description, regular ? /hizalandı/ : /varsayılan/);
+    assert.deepEqual(result.clips, context.selectedSuggestion(2).clips);
+    assert.equal(result.clips[0].start, 2);
+    assert.equal(result.clips[1].start, 1);
+    assert.deepEqual(context.selectedSuggestion(0).clips, suggestions(12, 12, {A:{start:2,end:12}, B:{start:1,end:9}})[0].clips);
+  }
+});
