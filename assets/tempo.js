@@ -62,7 +62,35 @@ function alignOverlayEntry(buffer, start, end, delay) {
   }
   return nearest === null ? null : nearest - start;
 }
-if (typeof module === 'object') module.exports = {estimateTempo, alignOverlayEntry};
+// Skip only a quiet lead-in followed by sustained audio in the first four seconds.
+function energeticEntry(buffer, start, end) {
+  const rate = buffer.sampleRate;
+  const frame = Math.max(1, Math.round(rate * 0.01));
+  const channels = Array.from({length: Math.min(2, buffer.numberOfChannels)},
+    (_, index) => buffer.getChannelData(index));
+  const first = Math.ceil(start * rate);
+  const last = Math.min(buffer.length, Math.floor(Math.min(end, start + 4) * rate));
+  let onset = null;
+  for (let offset = first; offset + frame <= last; offset += frame) {
+    let peak = 0;
+    for (const channel of channels) {
+      for (let i = offset; i < offset + frame; i++) peak = Math.max(peak, Math.abs(channel[i]));
+    }
+    if (onset === null) {
+      if (peak < 0.001) continue;
+      if (offset - first < 0.25 * rate) return start;
+      onset = offset;
+    }
+    // Keep fades, low-level introductions and isolated transients intact.
+    if (peak < 0.02) return start;
+    if (offset + frame - onset >= 0.06 * rate) {
+      const entry = onset / rate - 0.03;
+      return end - entry >= 0.25 ? entry : start;
+    }
+  }
+  return start;
+}
+if (typeof module === 'object') module.exports = {estimateTempo, alignOverlayEntry, energeticEntry};
 
 function bindTempoControls(selectRange) {
   for (const id of ['A', 'B']) {

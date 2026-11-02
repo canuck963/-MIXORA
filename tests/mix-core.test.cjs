@@ -82,3 +82,25 @@ test('cinematic preview and apply use the same nearby observed beat or the origi
     assert.deepEqual(context.selectedSuggestion(0).clips, suggestions(12, 12, {A:{start:2,end:12}, B:{start:1,end:9}})[0].clips);
   }
 });
+
+test('energetic trims only a silent lead-in inside B and keeps the original selection', () => {
+  const fs = require('node:fs'), vm = require('node:vm');
+  const source = fs.readFileSync('assets/studio.js', 'utf8');
+  const select = source.slice(source.indexOf('function selectedSuggestion'), source.indexOf('for(let i=0;i<3;i++)'));
+  for (const [at, length, gain, expected] of [
+    [2.8, .3, .5, 2.77], [2.1, .3, .5, 2], [2.8, .02, .5, 2],
+    [2.8, .3, .01, 2], [6.5, .3, .5, 2], [2.8, .3, 0, 2]
+  ]) {
+    const buffer = {...clickTrack(48000, [0.5]), duration: 12};
+    buffer.getChannelData(1).fill(gain, Math.round(at * 48000), Math.round((at + length) * 48000));
+    const values = {startA: 0, endA: 8, startB: 2, endB: 10};
+    const scope = vm.createContext({tracks: {A: {buffer}, B: {buffer}}, $: id => ({value: values[id]}),
+      MixCore: {suggestions}, ...require('../assets/tempo.js')});
+    vm.runInContext(select, scope);
+    const energetic = scope.selectedSuggestion(1);
+    assert.ok(Math.abs(energetic.clips[1].start - expected) < 0.001);
+    assert.equal(energetic.clips[1].end, 10);
+    assert.equal(scope.selectedSuggestion(0).clips[1].start, 2);
+    assert.deepEqual(scope.selectedSuggestion(1).clips, energetic.clips);
+  }
+});

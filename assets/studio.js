@@ -7,6 +7,14 @@ const suggestionNames=['Duygusal','Enerjik','Sinematik'];
 function selectedSuggestion(i){
   const ranges={};for(const id of ['A','B'])ranges[id]={start:Number($('start'+id).value),end:Number($('end'+id).value)};
   const suggestion = MixCore.suggestions(tracks.A?.buffer.duration, tracks.B?.buffer.duration, ranges)[i];
+  if (i === 1) {
+    const clip = suggestion.clips[1];
+    const start = energeticEntry(tracks.B.buffer, clip.start, clip.end);
+    if (start > clip.start) {
+      clip.start = start;
+      suggestion.description = 'B bölümünün başındaki sessizlik kısaltıldı. Kısa geçişle girer.';
+    }
+  }
   const entry = suggestion.clips.find(clip => clip.overlay);
   if (entry) {
     const delay = alignOverlayEntry(tracks.A.buffer, ranges.A.start, ranges.A.end, entry.delay);
