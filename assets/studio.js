@@ -7,6 +7,15 @@ const suggestionNames=['Duygusal','Enerjik','Sinematik'];
 function selectedSuggestion(i){
   const ranges={};for(const id of ['A','B'])ranges[id]={start:Number($('start'+id).value),end:Number($('end'+id).value)};
   const suggestion = MixCore.suggestions(tracks.A?.buffer.duration, tracks.B?.buffer.duration, ranges)[i];
+  if (i === 0) {
+    const [a, b] = suggestion.clips;
+    const maxOverlap = Math.min(suggestion.fade, (a.end - a.start) / 2, (b.end - b.start) / 2);
+    const fade = emotionalFade(tracks.B.buffer, b.start, b.end, maxOverlap);
+    if (fade !== null) {
+      suggestion.fade = fade;
+      suggestion.description = 'Geçiş, B bölümünde sesin yükseldiği noktada tamamlanır.';
+    }
+  }
   if (i === 1) {
     const clip = suggestion.clips[1];
     const start = energeticEntry(tracks.B.buffer, clip.start, clip.end);

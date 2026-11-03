@@ -71,7 +71,7 @@ test('cinematic preview and apply use the same nearby observed beat or the origi
     const times = regular ? Array.from({length: 20}, (_, i) => 2.16 + i / 2) : [];
     const buffer = {...clickTrack(48000, times), duration: 12};
     const context = vm.createContext({tracks: {A: {buffer}, B: {buffer}}, $: id => ({value: range[id]}),
-      MixCore: {suggestions}, alignOverlayEntry: require('../assets/tempo.js').alignOverlayEntry});
+      MixCore: {suggestions}, ...require('../assets/tempo.js')});
     vm.runInContext(select, context);
     const result = context.selectedSuggestion(2);
     assert.ok(Math.abs(result.clips[1].delay - (regular ? 4.16 : 4)) < 0.011);
@@ -102,5 +102,29 @@ test('energetic trims only a silent lead-in inside B and keeps the original sele
     assert.equal(energetic.clips[1].end, 10);
     assert.equal(scope.selectedSuggestion(0).clips[1].start, 2);
     assert.deepEqual(scope.selectedSuggestion(1).clips, energetic.clips);
+  }
+});
+
+test('emotional crossfade follows a sustained lift only within the playable overlap', () => {
+  const fs = require('node:fs'), vm = require('node:vm');
+  const studio = fs.readFileSync('assets/studio.js', 'utf8');
+  const select = studio.slice(studio.indexOf('function selectedSuggestion'), studio.indexOf('for(let i=0;i<3;i++)'));
+  for (const [intro, riseLength, endA, expected] of [
+    [.025, 1, 10, 2.25], [.025, .25, 10, 5], [0, 1, 10, 5],
+    [.4, 1, 10, 5], [.025, 1, 4, 5]
+  ]) {
+    const buffer = {...clickTrack(44100, []), duration: 12};
+    const right = buffer.getChannelData(1);
+    right.fill(.8, 0, 44100);
+    right.fill(intro, 44100);
+    right.fill(.4, Math.ceil(3.25 * 44100), Math.ceil((3.25 + riseLength) * 44100));
+    const values = {startA: 0, endA, startB: 1, endB: 11};
+    const scope = vm.createContext({tracks: {A: {buffer}, B: {buffer}}, $: id => ({value: values[id]}),
+      MixCore: {suggestions}, ...require('../assets/tempo.js')});
+    vm.runInContext(select, scope);
+    const result = scope.selectedSuggestion(0);
+    assert.equal(result.fade, expected);
+    assert.deepEqual(result.clips.map(c => [c.start, c.end]), [[0, endA], [1, 11]]);
+    assert.equal(plan(result.clips, result.fade).items[1].at, endA - Math.min(endA / 2, expected));
   }
 });

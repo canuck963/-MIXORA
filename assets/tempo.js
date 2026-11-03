@@ -90,7 +90,33 @@ function energeticEntry(buffer, start, end) {
   }
   return start;
 }
-if (typeof module === 'object') module.exports = {estimateTempo, alignOverlayEntry, energeticEntry};
+// End the overlap at a sustained rise after an audible, quieter introduction.
+function emotionalFade(buffer, start, end, maxOverlap) {
+  const rate = buffer.sampleRate;
+  const channels = Array.from({length: Math.min(2, buffer.numberOfChannels)},
+    (_, index) => buffer.getChannelData(index));
+  const levels = [];
+  const limit = Math.min(end - start, maxOverlap + 0.5, 5.5);
+  for (let block = 0; (block + 1) / 4 <= limit; block++) {
+    const first = Math.ceil((start + block / 4) * rate);
+    const last = Math.min(buffer.length, Math.ceil((start + (block + 1) / 4) * rate));
+    let power = 0;
+    for (const channel of channels) {
+      for (let i = first; i < last; i++) power += channel[i] ** 2;
+    }
+    levels.push(Math.sqrt(power / ((last - first) * channels.length)));
+  }
+  if (levels.length < 6) return null;
+  const intro = levels.slice(0, 4);
+  if (Math.min(...intro) < 0.002) return null;
+  const threshold = Math.max(0.02, Math.max(...intro) * 2);
+  for (let i = 4; i + 1 < levels.length; i++) {
+    if (i / 4 > maxOverlap) break;
+    if (levels[i] >= threshold && levels[i + 1] >= threshold) return i / 4;
+  }
+  return null;
+}
+if (typeof module === 'object') module.exports = {estimateTempo, alignOverlayEntry, energeticEntry, emotionalFade};
 
 function bindTempoControls(selectRange) {
   for (const id of ['A', 'B']) {
