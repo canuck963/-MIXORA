@@ -79,6 +79,11 @@ class API(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM sessions WHERE user_id=?',(uid,)).fetchone()[0],0)
             self.assertEqual(db.execute('SELECT count(*) FROM likes').fetchone()[0],0)
 
+    def test_tempo_module_is_served(self):
+        response = self.call('/assets/tempo.js')
+        self.assertEqual(response['status'], 200)
+        self.assertIn(b'function estimateTempo', response['body'])
+
     def test_security(self):
         cookie,_=self.register()
         self.assertEqual(self.call('/api/profile','PATCH',{'name':'Evil','bio':''},cookie=cookie,headers={'HTTP_ORIGIN':'https://evil.test'})['status'],403)

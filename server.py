@@ -23,7 +23,7 @@ ORIGIN = os.environ.get('MIXORA_ORIGIN', 'http://localhost:8000').rstrip('/')
 SECURE = ORIGIN.startswith('https://')
 MAX_AUDIO = 60 * 1024 * 1024
 STATIC = {'index.html','Remix.html','remix.html','community.html','local-community.html',
-          'assets/platform.css','assets/community.js','assets/studio.js','assets/mix-core.js'}
+          'assets/platform.css','assets/community.js','assets/studio.js','assets/mix-core.js','assets/tempo.js'}
 
 @contextmanager
 def connect():
