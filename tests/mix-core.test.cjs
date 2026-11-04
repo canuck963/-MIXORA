@@ -128,3 +128,54 @@ test('emotional crossfade follows a sustained lift only within the playable over
     assert.equal(plan(result.clips, result.fade).items[1].at, endA - Math.min(endA / 2, expected));
   }
 });
+
+test('stop and newer playback cancel pending audio resumes in both editors', async () => {
+  const fs = require('node:fs'), vm = require('node:vm');
+  for (const [page, name] of [['Remix.html', 'play'], ['remix.html', 'playSequence']]) {
+    const html = fs.readFileSync(page, 'utf8');
+    const stop = html.match(/function stop\(\).*$/m)[0];
+    const play = html.match(new RegExp('async function ' + name + '\\(.*$', 'm'))[0];
+    const pending = [];
+    let starts = 0;
+    const gain = {setValueAtTime(){}, linearRampToValueAtTime(){}};
+    const scope = vm.createContext({
+      ctx: {resume: () => new Promise(resolve => pending.push(resolve)), currentTime: 0,
+        createBufferSource: () => ({connect: () => ({connect(){}}), start(){starts++;}, stop(){}}),
+        createGain: () => ({gain})},
+      $: () => ({style: {}, value: 1}), note(){}, clearTimeout(){}, setTimeout(){},
+      performance: {now: () => 0}, schedule: () => {starts++; return 2;},
+      fadeTime: () => 0, total: () => 2, sec: String, tracks: {A: {buffer: {}}}
+    });
+    vm.runInContext('let sources=[],active=[],timer=null,stopTimer=null,playbackVersion=0;\n' + stop + '\n' + play, scope);
+    const clips = [{id:'A', start:0, end:2}];
+    const stopped = scope[name](clips);
+    scope.stop();
+    pending.shift()();
+    await stopped;
+    assert.equal(starts, 0, page + ' must remain stopped after resume');
+
+    const old = scope[name](clips);
+    const latest = scope[name](clips);
+    pending.pop()();
+    await latest;
+    assert.equal(starts, 1, page + ' latest request starts once');
+    pending.shift()();
+    await old;
+    assert.equal(starts, 1, page + ' stale request cannot start another source');
+
+    const earlier = scope[name](clips);
+    const newer = scope[name](clips);
+    pending.shift()();
+    await earlier;
+    assert.equal(starts, 1, page + ' early stale resume stays cancelled');
+    pending.shift()();
+    await newer;
+    assert.equal(starts, 2, page + ' newer request starts after stale resume');
+
+    scope.stop();
+    const next = scope[name](clips);
+    pending.shift()();
+    await next;
+    assert.equal(starts, 3, page + ' can play again after stop');
+  }
+});
