@@ -62,6 +62,29 @@ class API(unittest.TestCase):
         with server.connect() as db:
             self.assertEqual(db.execute('SELECT count(*) FROM likes').fetchone()[0],0)
             self.assertEqual(db.execute('SELECT count(*) FROM comments').fetchone()[0],0)
+    def test_audio_seek_ranges(self):
+        cookie,_ = self.register()
+        pid,audio = self.post(cookie)
+        path = '/api/posts/' + pid + '/audio'
+        size = len(audio)
+        huge = '9' * 5000
+        for request,start,stop in [
+            ('bytes=0-1', 0, 2), ('bytes=5-', 5, size),
+            ('bytes=-12', size-12, size), ('bytes=9-' + huge, 9, size),
+            ('bytes=-' + huge, 0, size), ('bytes=' + '0'*5000 + '3-6', 3, 7),
+        ]:
+            with self.subTest(request=request[:20]):
+                result = self.call(path, headers={'HTTP_RANGE':request})
+                self.assertEqual(result['status'], 206)
+                self.assertEqual(result['body'], audio[start:stop])
+                self.assertEqual(result['headers']['Content-Range'], f'bytes {start}-{stop-1}/{size}')
+                self.assertEqual(result['headers']['Content-Length'], str(stop-start))
+        for request in ('bytes=-0', 'bytes=8-7', 'bytes=-', 'bytes=' + huge + '-'):
+            result = self.call(path, headers={'HTTP_RANGE':request})
+            self.assertEqual(result['status'], 416)
+            self.assertEqual(result['headers']['Content-Range'], f'bytes */{size}')
+            self.assertIn('error', result['body'])
+
     def test_account_deletion_requires_password_and_cleans_up(self):
         a,uid=self.register()
         b,bid=self.register('b@example.com')

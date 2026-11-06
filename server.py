@@ -123,6 +123,25 @@ def audio_type(data):
     if data[4:8] == b'ftyp' and data[8:12] in (b'M4A ',b'isom',b'mp42'): return 'audio/mp4'
     fail(415,'MP3, WAV veya M4A ses dosyası gerekli.')
 
+def audio_range(value, size):
+    match = re.fullmatch(r'bytes=([0-9]*)-([0-9]*)', value, re.IGNORECASE)
+    if not match or not any(match.groups()):
+        return None
+
+    def bounded_offset(digits):
+        # Values beyond the file only need a sentinel, even for very long fields.
+        digits = digits.lstrip('0') or '0'
+        return size if len(digits) > len(str(size)) else min(int(digits), size)
+
+    first, last = match.groups()
+    if first:
+        start = bounded_offset(first)
+        end = min(bounded_offset(last), size - 1) if last else size - 1
+    else:
+        start = size - bounded_offset(last)
+        end = size - 1
+    return (start, end) if start <= end else None
+
 def email_configured():
     api_ready = bool(os.environ.get('BREVO_API_KEY') and os.environ.get('MIXORA_SMTP_FROM'))
     smtp_ready = all(os.environ.get(key) for key in ('MIXORA_SMTP_HOST','MIXORA_SMTP_FROM','MIXORA_SMTP_USER','MIXORA_SMTP_PASSWORD'))
@@ -372,12 +391,10 @@ def route(env, db):
             size=post['size']; start=0; end=size-1; status=200
             rng=env.get('HTTP_RANGE')
             if rng:
-                m=re.fullmatch(r'bytes=(\d*)-(\d*)',rng)
-                if not m or not any(m.groups()): fail(416,'Geçersiz aralık.')
-                a,b=m.groups()
-                if a: start=int(a); end=min(int(b),end) if b else end
-                else: start=max(0,size-int(b))
-                if start>end or start>=size: fail(416,'Geçersiz aralık.')
+                requested = audio_range(rng, size)
+                if requested is None:
+                    return 416, {'error':'Geçersiz aralık.'}, [('Content-Range', f'bytes */{size}'), ('Accept-Ranges','bytes')]
+                start, end = requested
                 status=206; headers.append(('Content-Range',f'bytes {start}-{end}/{size}'))
             audio=db.execute('SELECT substr(audio,?,?) FROM posts WHERE id=?',(start+1,end-start+1,pid)).fetchone()[0]
             headers.extend([('Content-Type',post['mime']),('Accept-Ranges','bytes')])
