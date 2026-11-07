@@ -1,6 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let user = null, offset = 0, online = false;
+let user = null, offset = 0, online = false, feedVersion = 0;
 const status = text => { $('status').textContent = text; };
 async function api(path, options = {}) {
   const response = await fetch('api/' + path, {credentials:'same-origin', ...options});
@@ -48,10 +48,14 @@ async function card(post){
   const form=el('form'),input=el('input');input.placeholder='Yorumunu yaz';input.setAttribute('aria-label','Yorum');input.maxLength=500;input.required=true;const send=el('button','Yorum ekle');form.append(input,send);form.onsubmit=e=>{e.preventDefault();run(send,async()=>{await api('posts/'+post.id+'/comments',json('POST',{body:input.value}));input.value='';await comments();summary.textContent=(++post.comments)+' yorum';});};details.append(form);box.append(details);return box;
 }
 async function feed(reset=false){
+  const version = ++feedVersion;
   if(reset){offset=0;$('feed').replaceChildren();}
   const selected=new URLSearchParams(location.search).get('post');
   const data=selected?{posts:[await api('posts/'+encodeURIComponent(selected))]}:await api('posts?offset='+offset);
-  for(const post of data.posts)$('feed').append(await card(post));offset+=data.posts.length;
+  if(version !== feedVersion)return;
+  const cards = await Promise.all(data.posts.map(card));
+  if(version !== feedVersion)return;
+  $('feed').append(...cards);offset+=data.posts.length;
   $('more').hidden=!!selected||data.posts.length<20;
   if(!offset)$('feed').append(el('div','Henüz remix yok. İlk sesi sen paylaş.','panel'));
 }
