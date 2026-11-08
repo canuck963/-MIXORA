@@ -151,13 +151,15 @@ test('stop and newer playback cancel pending audio resumes in both editors', asy
     const stopped = scope[name](clips);
     scope.stop();
     pending.shift()();
-    await stopped;
+    const stoppedResult = await stopped;
+    if(name === 'play')assert.equal(stoppedResult, false);
     assert.equal(starts, 0, page + ' must remain stopped after resume');
 
     const old = scope[name](clips);
     const latest = scope[name](clips);
     pending.pop()();
-    await latest;
+    const latestResult = await latest;
+    if(name === 'play')assert.equal(latestResult, true);
     assert.equal(starts, 1, page + ' latest request starts once');
     pending.shift()();
     await old;
@@ -178,4 +180,33 @@ test('stop and newer playback cancel pending audio resumes in both editors', asy
     await next;
     assert.equal(starts, 3, page + ' can play again after stop');
   }
+});
+
+test('cancelled preview cannot overwrite the stop or newer preview message', async () => {
+  const fs = require('node:fs'), vm = require('node:vm');
+  const studio = fs.readFileSync('assets/studio.js', 'utf8');
+  const handler = studio.match(/preview.onclick=async.*$/m)[0];
+  const pending = [];
+  let message = 'stopped';
+  let selection = 0;
+  const scope = vm.createContext({
+    preview: {}, i: 0,
+    selectedSuggestion: () => ({name:'Preview ' + ++selection, clips:[], fade:2, description:'test'}),
+    play: () => new Promise(resolve => pending.push(resolve)),
+    note: text => {message = text;}
+  });
+  vm.runInContext(handler, scope);
+  const old = scope.preview.onclick();
+  const newer = scope.preview.onclick();
+  pending[1](true);
+  await newer;
+  const current = message;
+  pending[0](false);
+  await old;
+  assert.equal(message, current);
+  const stopped = scope.preview.onclick();
+  message = 'stopped';
+  pending[2](false);
+  await stopped;
+  assert.equal(message, 'stopped');
 });

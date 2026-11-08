@@ -40,7 +40,7 @@ for(let i=0;i<3;i++){
   const card=document.createElement('div');card.className='suggestion-card';
   const title=document.createElement('h3');title.textContent=(i+1)+'. '+suggestionNames[i];
   const preview=document.createElement('button');preview.textContent='▶ Dinle';preview.dataset.preview=i;preview.setAttribute('aria-label',suggestionNames[i]+' önerisini dinle');
-  preview.onclick=async()=>{try{const s=selectedSuggestion(i);await play(s.clips,s.fade);note('▶ '+s.name+' önizlemesi. Çizelgen değişmedi. '+s.description);}catch(e){note(e.message);}};
+  preview.onclick=async()=>{try{const s=selectedSuggestion(i);if(!await play(s.clips,s.fade))return;note('▶ '+s.name+' önizlemesi. Çizelgen değişmedi. '+s.description);}catch(e){note(e.message);}};
   const apply=document.createElement('button');apply.textContent='Çizelgeye uygula';apply.dataset.apply=i;apply.setAttribute('aria-label',suggestionNames[i]+' önerisini uygula');
   apply.onclick=()=>{try{const s=selectedSuggestion(i);stop();clips.splice(0,clips.length,...s.clips);$('fade').value=s.fade;$('fade').dispatchEvent(new Event('input'));render();note(s.name+' hazır. '+s.description);}catch(e){note(e.message);}};
   card.append(title,preview,apply);$('threeSuggestions').append(card);
