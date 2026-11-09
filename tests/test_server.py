@@ -85,6 +85,21 @@ class API(unittest.TestCase):
             self.assertEqual(result['headers']['Content-Range'], f'bytes */{size}')
             self.assertIn('error', result['body'])
 
+    def test_like_response_reports_current_count_and_retry_state(self):
+        owner,_ = self.register()
+        other,_ = self.register('other@example.com')
+        pid,_ = self.post(owner)
+        path = '/api/posts/' + pid + '/likes'
+        first = self.call(path, 'POST', cookie=owner)
+        self.assertEqual(first['body'], {'ok':True, 'likes':1, 'liked':True})
+        self.call(path, 'POST', cookie=other)
+        retry = self.call(path, 'POST', cookie=owner)
+        self.assertEqual(retry['body'], {'ok':True, 'likes':2, 'liked':True})
+        for _ in range(2):
+            removed = self.call(path, 'DELETE', cookie=owner)
+            self.assertEqual(removed['body'], {'ok':True, 'likes':1, 'liked':False})
+        self.assertEqual(self.call('/api/posts/'+pid)['body']['likes'], 1)
+
     def test_account_deletion_requires_password_and_cleans_up(self):
         a,uid=self.register()
         b,bid=self.register('b@example.com')

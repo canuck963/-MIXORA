@@ -412,7 +412,8 @@ def route(env, db):
         if action=='likes' and method in ('POST','DELETE'):
             if method=='POST': db.execute('INSERT OR IGNORE INTO likes VALUES(?,?)',(pid,user['id']))
             else: db.execute('DELETE FROM likes WHERE post_id=? AND user_id=?',(pid,user['id']))
-            return 200,{'ok':True},headers
+            count = db.execute('SELECT count(*) FROM likes WHERE post_id=?',(pid,)).fetchone()[0]
+            return 200,{'ok':True,'likes':count,'liked':method=='POST'},headers
         if action=='comments' and method=='GET':
             rows=db.execute('SELECT c.id,c.body,c.created,u.name,u.id user_id FROM comments c JOIN users u ON u.id=c.user_id WHERE post_id=? ORDER BY c.created DESC LIMIT 100',(pid,)).fetchall()
             return 200,{'comments':[dict(r) for r in rows]},headers

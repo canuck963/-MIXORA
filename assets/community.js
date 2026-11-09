@@ -39,7 +39,7 @@ async function card(post){
   if(post.description)box.append(el('p',post.description));
   const audio=el('audio');audio.controls=true;audio.preload='none';audio.src='api/posts/'+post.id+'/audio';audio.setAttribute('aria-label',post.title);audio.onplay=()=>document.querySelectorAll('audio').forEach(a=>{if(a!==audio)a.pause();});box.append(audio);
   const actions=el('div',undefined,'actions');
-  const like=button((post.liked?'♥ ':'♡ ')+post.likes,async()=>{if(!user)throw Error('Beğenmek için giriş yap.');await api('posts/'+post.id+'/likes',{method:post.liked?'DELETE':'POST'});post.likes+=post.liked?-1:1;post.liked=!post.liked;like.textContent=(post.liked?'♥ ':'♡ ')+post.likes;});actions.append(like);
+  const like=button((post.liked?'♥ ':'♡ ')+post.likes,async()=>{if(!user)throw Error('Beğenmek için giriş yap.');const result=await api('posts/'+post.id+'/likes',{method:post.liked?'DELETE':'POST'});post.likes=result.likes;post.liked=result.liked;like.textContent=(post.liked?'♥ ':'♡ ')+post.likes;});actions.append(like);
   actions.append(button('Bağlantıyı paylaş ↗',async()=>{const url=new URL(location.href);url.search='?post='+post.id;url.hash='';if(navigator.share){try{await navigator.share({title:post.title,url:url.href});}catch(e){if(e.name!=='AbortError')throw e;}}else{await navigator.clipboard.writeText(url.href);status('Bağlantı kopyalandı.');}}));
   if(user?.id===post.user_id)actions.append(button('Sil',async()=>{if(confirm('Bu remix herkese açık akıştan silinsin mi?')){await api('posts/'+post.id,{method:'DELETE'});box.remove();status('Remix silindi.');}}));box.append(actions);
   const details=el('details'),summary=el('summary',post.comments+' yorum'),list=el('div');details.append(summary,list);
