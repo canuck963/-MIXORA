@@ -210,3 +210,39 @@ test('cancelled preview cannot overwrite the stop or newer preview message', asy
   await stopped;
   assert.equal(message, 'stopped');
 });
+
+test('audio errors stop partial playback, allow retry, and stale failures stay silent', async () => {
+  const fs = require('node:fs'), vm = require('node:vm');
+  for (const [page, name] of [['Remix.html','play'],['remix.html','playSequence']]) {
+    const html = fs.readFileSync(page,'utf8');
+    let message = '', stopped = 0;
+    const pending = [];
+    const ctx = {resume: () => new Promise((resolve,reject) => pending.push({resolve,reject})),
+      createBufferSource(){throw Error('audio failed');}};
+    const scope = vm.createContext({ctx, $:()=>({style:{},value:1}), note:s=>{message=s;},
+      clearTimeout(){}, setTimeout(){}, performance:{now:()=>0}, fadeTime:()=>0,
+      schedule(){throw Error('audio failed');}});
+    vm.runInContext('let playbackVersion=0,sources=[],active=[],timer=null,stopTimer=null;\n'+
+      html.match(/function stop\(\).*$/m)[0]+'\n'+
+      html.match(new RegExp('async function '+name+'\\(.*$','m'))[0],scope);
+    const list=[{id:'A',start:0,end:2}];
+    const failed=scope[name](list);
+    scope.partial={stop(){stopped++;}};
+    vm.runInContext((name==='play'?'sources':'active')+'.push(partial)',scope);
+    pending.shift().resolve();
+    assert.equal(await failed,false);
+    assert.equal(stopped,1);
+    assert.match(message,/Ses başlatılamadı/);
+
+    const older=scope[name](list);
+    const newer=scope[name](list);
+    message='new request';
+    pending.shift().reject(Error('old permission failure'));
+    await older;
+    assert.equal(message,'new request');
+    pending.shift().reject(Error('permission failure'));
+    assert.equal(await newer,false);
+    assert.match(message,/permission failure/);
+    assert.equal(vm.runInContext('sources.length+active.length',scope),0);
+  }
+});
