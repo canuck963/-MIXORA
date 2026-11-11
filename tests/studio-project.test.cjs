@@ -65,3 +65,18 @@ test('local rendered remix keeps the title captured when recording started',asyn
  const saving=el('saveLocalMix').onclick();el('projectName').value='Different remix';gate.resolve({});await saving;
  assert.equal(c.written.title,'Original');assert.equal(c.written.fileName,'MIXORA-remix.wav');
 });
+
+test('corrupt saved gain settings are rejected before replacing the working project', async () => {
+ for(const [key,value] of [['volume',100],['impact',NaN],['overVol',-1]]) {
+  const {context:c,el}=setup();
+  c.saved.clips[1][key]=value;
+  let decodes=0;
+  c.ctx.decodeAudioData=async()=>{decodes++;return {duration:10};};
+  await el('restoreProject').onclick();
+  assert.equal(decodes,0);
+  assert.equal(c.tracks.A.file.name,'A.wav');
+  assert.equal(c.clips[0].start,1);
+  assert.match(el('status').textContent,/ses ayarı/);
+  assert.equal(el('restoreProject').disabled,false);
+ }
+});

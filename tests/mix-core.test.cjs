@@ -246,3 +246,16 @@ test('audio errors stop partial playback, allow retry, and stale failures stay s
     assert.equal(vm.runInContext('sources.length+active.length',scope),0);
   }
 });
+
+test('rejects corrupt gain controls while accepting legacy defaults and supported limits', () => {
+  const clip={id:'A',start:0,end:2};
+  for(const [key,max] of [['volume',1.3],['overVol',1],['impact',1]]) {
+    for(const value of [-.01,NaN,Infinity,'0.5',max+.01]) {
+      assert.throws(()=>plan([{...clip,[key]:value}]),/ses ayarı/);
+    }
+    for(const value of [0,max,null,undefined]) {
+      assert.equal(plan([{...clip,[key]:value}]).length,2);
+    }
+  }
+  assert.equal(plan([clip]).length,2);
+});
