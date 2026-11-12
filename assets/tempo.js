@@ -45,10 +45,38 @@ function analyzePulse(buffer, start, end) {
   const regularGap = gap => Math.abs(gap - period) <= period * 0.08;
   const beats = peaks.filter((_, i) => regularGap(intervals[i - 1]) && regularGap(intervals[i]))
     .map(peak => (first + peak * frame) / rate);
-  return {bpm: measured, beats};
+  return {
+    bpm: measured,
+    beats,
+    confidence: consistent.length / intervals.length,
+    regularIntervals: consistent.length,
+    totalIntervals: intervals.length,
+    period: 60 / measured,
+    firstBeat: beats[0] ?? null
+  };
+}
+function analyzeTempo(buffer, start, end) {
+  return analyzePulse(buffer, start, end);
 }
 function estimateTempo(buffer, start, end) {
   return analyzePulse(buffer, start, end)?.bpm ?? null;
+}
+
+// Compare B's playback rate against A's beat grid and half/double-time
+// interpretations. Advisory only; this never changes audio playback.
+function tempoMatch(a, b, minRate = 0.7, maxRate = 1.3) {
+  if (![a, b, minRate, maxRate].every(Number.isFinite) ||
+      a < 60 || a > 180 || b < 60 || b > 180 ||
+      minRate <= 0 || maxRate < minRate) return null;
+  const options = [
+    {id: 'normal', label: 'A ana vuruşu', targetBpm: a, rate: a / b},
+    {id: 'half', label: 'A yarım zaman', targetBpm: a / 2, rate: a / (2 * b)},
+    {id: 'double', label: 'A çift zaman', targetBpm: a * 2, rate: (a * 2) / b}
+  ].map(option => ({...option, inRange: option.rate >= minRate && option.rate <= maxRate}));
+  const eligible = options.filter(option => option.inRange);
+  const recommended = (eligible.length ? eligible : options)
+    .sort((left, right) => Math.abs(Math.log(left.rate)) - Math.abs(Math.log(right.rate)))[0];
+  return {options, recommended, minRate, maxRate, hasInRange: eligible.length > 0};
 }
 
 function alignOverlayEntry(buffer, start, end, delay) {
@@ -123,8 +151,47 @@ function bindTempoControls(selectRange) {
     $('tempo' + id).onclick = () => {
       const range = selectRange(id);
       if (!range) return;
-      const bpm = estimateTempo(tracks[id].buffer, range.start, range.end);
-      note(id + (bpm ? ' · Tahmini tempo ' + bpm + ' BPM.' : ' · Tempo belirsiz. En az 4 saniyelik, düzenli vuruşlu bir bölüm seç.') + ' Seçimin ilk 30 saniyesine kadar ölçülür.');
+      const analysis = analyzeTempo(tracks[id].buffer, range.start, range.end);
+      const bpm = analysis?.bpm;
+      note(id + (bpm ? ' · Tahmini tempo ' + bpm + ' BPM · güven ' + Math.round(analysis.confidence * 100) + '%' :
+        ' · Tempo belirsiz. En az 4 saniyelik, düzenli vuruşlu bir bölüm seç.') + ' Seçimin ilk 30 saniyesine kadar ölçülür.');
     };
   }
+
+  // Local-only helper; it does not upload audio or apply a playback rate.
+  if (!$('tempoCompare')) {
+    const panel = document.createElement('section');
+    panel.className = 'card';
+    panel.innerHTML = '<h2>♩ Tempo eşleştirme</h2><p>Seçili A/B bölümlerinin BPM değerlerini karşılaştırır. A’nın normal, yarım veya çift zaman vuruşuna göre B için hız önerir. Bu yalnızca hesaplamadır; oynatma hızını değiştirmez ve hız değişimi perdeyi etkiler.</p><button id="tempoCompare">İki tempoyu karşılaştır</button><div id="tempoCompareResult" class="msg" role="status" aria-live="polite">İki parçayı yükle, en az 4 saniyelik düzenli bölümler seç.</div>';
+    document.querySelector('main').append(panel);
+  }
+  $('tempoCompare').onclick = () => {
+    const result = $('tempoCompareResult');
+    result.replaceChildren();
+    const analyses = {};
+    for (const id of ['A', 'B']) {
+      if (!tracks[id]) { result.textContent = 'Önce A ve B dosyalarını yükle.'; return; }
+      const range = selectRange(id);
+      if (!range) { result.textContent = id + ' için geçerli başlangıç/bitiş seç.'; return; }
+      analyses[id] = analyzeTempo(tracks[id].buffer, range.start, range.end);
+      if (!analyses[id]) { result.textContent = id + ' bölümünde güvenilir tempo bulunamadı. Daha uzun ve düzenli vuruşlu bir kesit dene.'; return; }
+    }
+    const match = tempoMatch(analyses.A.bpm, analyses.B.bpm);
+    const summary = document.createElement('p');
+    summary.textContent = 'A: ' + analyses.A.bpm + ' BPM (' + Math.round(analyses.A.confidence * 100) + '% güven) · B: ' +
+      analyses.B.bpm + ' BPM (' + Math.round(analyses.B.confidence * 100) + '% güven).';
+    result.append(summary);
+    for (const option of match.options) {
+      const line = document.createElement('p');
+      const recommended = option.id === match.recommended.id ? ' ★ Önerilen' : '';
+      line.textContent = option.label + ': B ' + option.targetBpm.toFixed(1) + ' BPM için ' +
+        (option.rate * 100).toFixed(1) + '% hız' + (option.inRange ? '' : ' (±30% aralığı dışında)') + recommended;
+      result.append(line);
+    }
+    const warning = document.createElement('p');
+    warning.textContent = match.hasInRange ?
+      'Öneri, ±30% hız aralığında ve 1.0× değerine en yakın seçenektir. Perde korumalı time-stretch henüz uygulanmıyor.' :
+      'Hiçbir seçenek ±30% aralığında değil; öneri en az sapmalı matematiksel seçenektir. Dinleyerek karar ver.';
+    result.append(warning);
+  };
 }

@@ -58,3 +58,12 @@ Sonraki somut işler:
 3. E-posta gönderimini veritabanı yazma işleminden ayıracak outbox/kuyruk ekle; sağlayıcı kesintilerini test et.
 4. Issue #2 için BPM belirsizliği, beat-grid ve pitch-preserving time-stretch; gerçek müzikle kalite değerlendirmesi hâlâ açık.
 5. Moderasyon, gerçek ses çözücü doğrulaması, yedek/geri yükleme ve yük testleri tamamlanmadan genel üretim hazır sayılmamalı.
+
+
+## 12 Kasım 2026 — BPM karşılaştırma ve hız önerisi (PR #8)
+
+- Mevcut 60–180 BPM pulse tahmini korunarak analiz sonucu güven oranı, düzenli aralık sayısı ve ilk güvenilir vuruş bilgisi dışarı açıldı. Eski `estimateTempo()` çağrıları geriye uyumlu.
+- İki stüdyo sayfasındaki tempo ölçüm düğmesi tahmini güven yüzdesini gösteriyor. Yeni yerel “Tempo eşleştirme” paneli seçili A/B kesitlerini analiz edip A normal/yarım/çift zaman grid seçenekleri için B hız çarpanlarını hesaplıyor; ±30% aralığındaki 1.0×'a en yakın seçeneği öneriyor. Hiç uygun seçenek yoksa en az sapmalı sonucu açıkça işaretliyor.
+- Bu yardımcı WAV/önizleme hızını değiştirmez, dosyaları sunucuya göndermez ve pitch-preserving time-stretch iddiası içermez. Hız değişimi uygulanırsa perde değişir; gerçek tempo eşitleme ve beat-grid editörü sonraki iş.
+- Yeni `tests/tempo-match.test.cjs`: 44.1/48 kHz sentetik 72/100/128/160 BPM, güven ve vuruş konumu, normal/yarım/çift zaman seçimi, ±30% dışı ve geçersiz girişler. Yerel Node testi 3/3 geçti. Tam depo testleri ve Chromium/WebKit bu oturumda checkout/CI olmadan çalıştırılmadı; PR dalına push sonrası GitHub Actions sonucu izlenmeli.
+- Devam: gerçek davul/senkop ve half/double tempo örnekleri; iPhone Safari’de panel erişilebilirliği; pitch-preserving time-stretch ve iki parça BPM/beat-grid uygulaması. PR #1 ses motoru taslağı ayrı kalır; issue #2 açık.
