@@ -144,7 +144,7 @@ function emotionalFade(buffer, start, end, maxOverlap) {
   }
   return null;
 }
-if (typeof module === 'object') module.exports = {estimateTempo, alignOverlayEntry, energeticEntry, emotionalFade};
+if (typeof module === 'object') module.exports = {analyzeTempo, estimateTempo, tempoMatch, alignOverlayEntry, energeticEntry, emotionalFade};
 
 function bindTempoControls(selectRange) {
   for (const id of ['A', 'B']) {
@@ -159,13 +159,13 @@ function bindTempoControls(selectRange) {
   }
 
   // Local-only helper; it does not upload audio or apply a playback rate.
-  if (!$('tempoCompare')) {
+  if (typeof document !== 'undefined' && !$('tempoCompare')) {
     const panel = document.createElement('section');
     panel.className = 'card';
     panel.innerHTML = '<h2>♩ Tempo eşleştirme</h2><p>Seçili A/B bölümlerinin BPM değerlerini karşılaştırır. A’nın normal, yarım veya çift zaman vuruşuna göre B için hız önerir. Bu yalnızca hesaplamadır; oynatma hızını değiştirmez ve hız değişimi perdeyi etkiler.</p><button id="tempoCompare">İki tempoyu karşılaştır</button><div id="tempoCompareResult" class="msg" role="status" aria-live="polite">İki parçayı yükle, en az 4 saniyelik düzenli bölümler seç.</div>';
     document.querySelector('main').append(panel);
   }
-  $('tempoCompare').onclick = () => {
+  if (typeof document !== 'undefined') $('tempoCompare').onclick = () => {
     const result = $('tempoCompareResult');
     result.replaceChildren();
     const analyses = {};

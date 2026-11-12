@@ -67,3 +67,9 @@ Sonraki somut işler:
 - Bu yardımcı WAV/önizleme hızını değiştirmez, dosyaları sunucuya göndermez ve pitch-preserving time-stretch iddiası içermez. Hız değişimi uygulanırsa perde değişir; gerçek tempo eşitleme ve beat-grid editörü sonraki iş.
 - Yeni `tests/tempo-match.test.cjs`: 44.1/48 kHz sentetik 72/100/128/160 BPM, güven ve vuruş konumu, normal/yarım/çift zaman seçimi, ±30% dışı ve geçersiz girişler. Yerel Node testi 3/3 geçti. Tam depo testleri ve Chromium/WebKit bu oturumda checkout/CI olmadan çalıştırılmadı; PR dalına push sonrası GitHub Actions sonucu izlenmeli.
 - Devam: gerçek davul/senkop ve half/double tempo örnekleri; iPhone Safari’de panel erişilebilirliği; pitch-preserving time-stretch ve iki parça BPM/beat-grid uygulaması. PR #1 ses motoru taslağı ayrı kalır; issue #2 açık.
+
+
+### 12 Kasım CI düzeltmesi — BPM panelinin test ortamı
+
+- İlk push CI (#107/#108) Node testinde 4 hata gösterdi: yeni `analyzeTempo/tempoMatch` dışa aktarılmamış ve mevcut VM testinde `document` bulunmadığında UI paneli oluşturuluyordu. Bu gerçek CI hatası; yalnızca yerel test raporuna güvenilmedi.
+- Dışa aktarımlar düzeltildi; tempo paneli DOM yalnızca tarayıcı ortamında bağlanıyor. Yeni tempo testleri yerelde tekrar 3/3 geçti. Tam `tests/*.test.cjs` ve Chromium/WebKit CI yeniden çalıştırılmalı.
