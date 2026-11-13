@@ -79,19 +79,23 @@ function tempoMatch(a, b, minRate = 0.7, maxRate = 1.3) {
   return {options, recommended, minRate, maxRate, hasInRange: eligible.length > 0};
 }
 
-// Snap selection edges to observed beat attacks without moving either edge beyond tolerance.
+// Snap selection edges against beat grids analyzed with context on both sides.
 function snapRangeToBeats(buffer, start, end, tolerance) {
   if (!buffer || !Number.isFinite(buffer.sampleRate) || buffer.sampleRate <= 0 ||
       !Number.isFinite(buffer.length) || buffer.length <= 0 ||
       !Number.isFinite(start) || !Number.isFinite(end) || start < 0 ||
       end > buffer.length / buffer.sampleRate + 0.001 || end - start < 0.15) return null;
-  const analysis = analyzeTempo(buffer, start, end);
-  if (!analysis || !analysis.beats.length) return null;
-  const limit = tolerance === undefined
+  const duration = buffer.length / buffer.sampleRate;
+  const context = time => analyzeTempo(buffer, Math.max(0, time - 5), Math.min(duration, time + 5));
+  const startAnalysis = context(start), endAnalysis = context(end);
+  if (!startAnalysis && !endAnalysis) return null;
+  const limitFor = analysis => tolerance === undefined
     ? Math.min(0.3, Math.max(0.08, 15 / analysis.bpm))
     : tolerance;
-  if (!Number.isFinite(limit) || limit < 0 || limit > 1) return null;
-  function nearest(time) {
+  if (tolerance !== undefined && (!Number.isFinite(tolerance) || tolerance < 0 || tolerance > 1)) return null;
+  function nearest(analysis, time) {
+    if (!analysis) return null;
+    const limit = limitFor(analysis);
     let candidate = null, distance = Infinity;
     for (const beat of analysis.beats) {
       const delta = Math.abs(beat - time);
@@ -99,15 +103,18 @@ function snapRangeToBeats(buffer, start, end, tolerance) {
     }
     return candidate;
   }
-  const startBeat = nearest(start), endBeat = nearest(end);
+  const startBeat = nearest(startAnalysis, start), endBeat = nearest(endAnalysis, end);
   if (startBeat === null && endBeat === null) return null;
   const snappedStart = startBeat === null ? start : startBeat;
   const snappedEnd = endBeat === null ? end : endBeat;
   if (snappedEnd - snappedStart < 0.15) return null;
+  const analyses = [startAnalysis, endAnalysis].filter(Boolean);
   return {
     start: snappedStart, end: snappedEnd,
     snappedStart: startBeat !== null, snappedEnd: endBeat !== null,
-    bpm: analysis.bpm, confidence: analysis.confidence, tolerance: limit
+    bpm: startAnalysis?.bpm ?? endAnalysis.bpm,
+    confidence: Math.min(...analyses.map(analysis => analysis.confidence)),
+    tolerance: tolerance ?? Math.min(...analyses.map(analysis => limitFor(analysis)))
   };
 }
 function alignOverlayEntry(buffer, start, end, delay) {
