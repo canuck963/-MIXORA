@@ -47,16 +47,16 @@ test('tempo match rejects invalid BPM or rate boundaries',()=>{
 
 test('beat snapping aligns only nearby selection edges and preserves valid duration',()=>{
   const buffer=pulseBuffer(48000,120);
-  const snapped=snapRangeToBeats(buffer,4.45,9.55);
+  const snapped=snapRangeToBeats(buffer,4.95,9.05);
   assert.ok(snapped);
   assert.equal(snapped.bpm,120);
   assert.equal(snapped.snappedStart,true);
   assert.equal(snapped.snappedEnd,true);
-  assert.ok(Math.abs(snapped.start-4.5)<.011);
-  assert.ok(Math.abs(snapped.end-9.5)<.011);
+  assert.ok(Math.abs(snapped.start-5.0)<.011);
+  assert.ok(Math.abs(snapped.end-9.0)<.011);
   assert.ok(snapped.end-snapped.start>=.15);
   assert.equal(snapRangeToBeats(buffer,4.1,9.8),null);
-  const oneEdge=snapRangeToBeats(buffer,4.45,9.8);
+  const oneEdge=snapRangeToBeats(buffer,4.95,9.8);
   assert.ok(oneEdge);
   assert.equal(oneEdge.snappedStart,true);
   assert.equal(oneEdge.snappedEnd,false);
@@ -79,13 +79,13 @@ test('both studio pages expose opt-in beat snap buttons and bind their own range
 });
 test('beat snap UI updates only the chosen source and leaves it unchanged when no beat is found',()=>{
   const fs=require('node:fs'),vm=require('node:vm');
-  const controls={snapA:{},snapB:{},startA:{value:'4.45'},endA:{value:'9.55'},startB:{value:'4.1'},endB:{value:'9.8'}};
+  const controls={snapA:{},snapB:{},startA:{value:'4.95'},endA:{value:'9.05'},startB:{value:'4.1'},endB:{value:'9.8'}};
   let message='';
   const scope=vm.createContext({$:id=>controls[id],tracks:{A:{buffer:pulseBuffer(48000,120)},B:{buffer:pulseBuffer(48000,120)}},note:value=>message=value});
   vm.runInContext(fs.readFileSync('assets/tempo.js','utf8'),scope);
   vm.runInContext('bindBeatSnapControls(id=>({start:Number($("start"+id).value),end:Number($("end"+id).value)}))',scope);
   controls.snapA.onclick();
-  assert.equal(controls.startA.value,'4.50');assert.equal(controls.endA.value,'9.50');
+  assert.equal(controls.startA.value,'5.00');assert.equal(controls.endA.value,'9.00');
   controls.snapB.onclick();
   assert.equal(controls.startB.value,'4.1');assert.equal(controls.endB.value,'9.8');
   assert.match(message,/kesit değişmedi/);
