@@ -55,7 +55,7 @@ test('beat snapping aligns only nearby selection edges and preserves valid durat
   assert.ok(Math.abs(snapped.start-6.0)<.011);
   assert.ok(Math.abs(snapped.end-9.0)<.011);
   assert.ok(snapped.end-snapped.start>=.15);
-  assert.equal(snapRangeToBeats(buffer,4.1,9.8),null);
+  assert.equal(snapRangeToBeats(buffer,4.2,9.8),null);
   const oneEdge=snapRangeToBeats(buffer,5.95,9.8);
   assert.ok(oneEdge);
   assert.equal(oneEdge.snappedStart,true);
@@ -79,7 +79,7 @@ test('both studio pages expose opt-in beat snap buttons and bind their own range
 });
 test('beat snap UI updates only the chosen source and leaves it unchanged when no beat is found',()=>{
   const fs=require('node:fs'),vm=require('node:vm');
-  const controls={snapA:{},snapB:{},startA:{value:'5.95'},endA:{value:'9.05'},startB:{value:'4.1'},endB:{value:'9.8'}};
+  const controls={snapA:{},snapB:{},startA:{value:'5.95'},endA:{value:'9.05'},startB:{value:'4.2'},endB:{value:'9.8'}};
   let message='';
   const scope=vm.createContext({$:id=>controls[id],tracks:{A:{buffer:pulseBuffer(48000,120)},B:{buffer:pulseBuffer(48000,120)}},note:value=>message=value});
   vm.runInContext(fs.readFileSync('assets/tempo.js','utf8'),scope);
@@ -87,6 +87,6 @@ test('beat snap UI updates only the chosen source and leaves it unchanged when n
   controls.snapA.onclick();
   assert.equal(controls.startA.value,'6.00');assert.equal(controls.endA.value,'9.00');
   controls.snapB.onclick();
-  assert.equal(controls.startB.value,'4.1');assert.equal(controls.endB.value,'9.8');
+  assert.equal(controls.startB.value,'4.2');assert.equal(controls.endB.value,'9.8');
   assert.match(message,/kesit değişmedi/);
 });
