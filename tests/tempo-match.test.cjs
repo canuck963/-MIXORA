@@ -88,5 +88,5 @@ test('beat snap UI updates only the chosen source and leaves it unchanged when n
   assert.equal(controls.startA.value,'6.00');assert.equal(controls.endA.value,'9.00');
   controls.snapB.onclick();
   assert.equal(controls.startB.value,'4.2');assert.equal(controls.endB.value,'9.8');
-  assert.match(message,/kesit değişmedi/);
+  assert.match(message,/Kesit değişmedi/);
 });
