@@ -73,7 +73,7 @@ test('both studio pages expose opt-in beat snap buttons and bind their own range
   const fs=require('node:fs');
   for(const [page,selector] of [['Remix.html','sel'],['remix.html','selection']]){
     const html=fs.readFileSync(page,'utf8');
-    assert.match(html,/id="snapA"/);assert.match(html,/id="snapB"/);
+    assert.match(html,/id="tempoA"/);assert.match(html,/id="tempoB"/);assert.match(html,/id="snapA"/);assert.match(html,/id="snapB"/);
     assert.ok(html.includes('bindBeatSnapControls('+selector+')'));
   }
 });
