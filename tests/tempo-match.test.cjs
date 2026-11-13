@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {analyzeTempo,tempoMatch}=require('../assets/tempo.js');
+const {analyzeTempo,tempoMatch,snapRangeToBeats}=require('../assets/tempo.js');
 
 function pulseBuffer(rate,bpm,seconds=12){
   const length=rate*seconds, left=new Float32Array(length), right=new Float32Array(length);
@@ -43,4 +43,50 @@ test('tempo match picks the closest usable half, normal or double-time grid',()=
 test('tempo match rejects invalid BPM or rate boundaries',()=>{
   for(const [a,b,min,max] of [[0,100,.7,1.3],[181,100,.7,1.3],[100,NaN,.7,1.3],[100,Infinity,.7,1.3],[100,100,0,1],[100,100,1,.5]])
     assert.equal(tempoMatch(a,b,min,max),null);
+});
+
+test('beat snapping aligns only nearby selection edges and preserves valid duration',()=>{
+  const buffer=pulseBuffer(48000,120);
+  const snapped=snapRangeToBeats(buffer,4.45,9.55);
+  assert.ok(snapped);
+  assert.equal(snapped.bpm,120);
+  assert.equal(snapped.snappedStart,true);
+  assert.equal(snapped.snappedEnd,true);
+  assert.ok(Math.abs(snapped.start-4.5)<.011);
+  assert.ok(Math.abs(snapped.end-9.5)<.011);
+  assert.ok(snapped.end-snapped.start>=.15);
+  assert.equal(snapRangeToBeats(buffer,4.1,9.8),null);
+  const oneEdge=snapRangeToBeats(buffer,4.45,9.8);
+  assert.ok(oneEdge);
+  assert.equal(oneEdge.snappedStart,true);
+  assert.equal(oneEdge.snappedEnd,false);
+  assert.equal(oneEdge.end,9.8);
+});
+test('beat snapping rejects invalid ranges, tolerance and quiet material',()=>{
+  const buffer=pulseBuffer(48000,120);
+  for(const args of [[buffer,-1,5],[buffer,2,1],[buffer,0,12.1],[buffer,0,0.1],[buffer,1,5,NaN],[buffer,1,5,-.1],[buffer,1,5,1.1]])
+    assert.equal(snapRangeToBeats(...args),null);
+  const quiet={sampleRate:48000,length:48000*8,numberOfChannels:1,getChannelData:()=>new Float32Array(48000*8)};
+  assert.equal(snapRangeToBeats(quiet,1,7),null);
+});
+test('both studio pages expose opt-in beat snap buttons and bind their own range selector',()=>{
+  const fs=require('node:fs');
+  for(const [page,selector] of [['Remix.html','sel'],['remix.html','selection']]){
+    const html=fs.readFileSync(page,'utf8');
+    assert.match(html,/id="snapA"/);assert.match(html,/id="snapB"/);
+    assert.ok(html.includes('bindBeatSnapControls('+selector+')'));
+  }
+});
+test('beat snap UI updates only the chosen source and leaves it unchanged when no beat is found',()=>{
+  const fs=require('node:fs'),vm=require('node:vm');
+  const controls={snapA:{},snapB:{},startA:{value:'4.45'},endA:{value:'9.55'},startB:{value:'4.1'},endB:{value:'9.8'}};
+  let message='';
+  const scope=vm.createContext({$:id=>controls[id],tracks:{A:{buffer:pulseBuffer(48000,120)},B:{buffer:pulseBuffer(48000,120)}},note:value=>message=value});
+  vm.runInContext(fs.readFileSync('assets/tempo.js','utf8'),scope);
+  vm.runInContext('bindBeatSnapControls(id=>({start:Number($("start"+id).value),end:Number($("end"+id).value)}))',scope);
+  controls.snapA.onclick();
+  assert.equal(controls.startA.value,'4.50');assert.equal(controls.endA.value,'9.50');
+  controls.snapB.onclick();
+  assert.equal(controls.startB.value,'4.1');assert.equal(controls.endB.value,'9.8');
+  assert.match(message,/kesit değişmedi/);
 });

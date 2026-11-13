@@ -25,3 +25,10 @@ PR #1, issue #2, açık PR #3/#4/#5 ve PR #1/#3 tartışmaları incelendi. Temel
 4. Gerçek e-posta teslimatı, lisanslı katalog/remix izinleri, moderasyon, ses çözücüyle sunucu doğrulaması, yedek geri yükleme ve yük testleri ayrı açık işlerdir. Yeni ücretli hizmet açılmadı.
 
 Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlığı iddiası içermez.
+
+ 
+## 13 Kasım 2026 — Kesit kenarlarını gözlenen vuruşa hizalama
+- Her iki stüdyo sayfasında A ve B seçimi için ayrı, kullanıcı kontrollü **Vuruşa hizala** düğmesi eklendi. Otomatik olarak kesit veya çizelge değiştirmez; yalnızca yakın ve güvenilir vuruş bulunan kenarı günceller. Kullanıcı sonucu kontrol edip çizelgeye ekler.
+- Yeni `snapRangeToBeats` yardımcı işlevi BPM analizinin gözlenen düzenli beat konumlarını kullanır. Varsayılan tolerans çeyrek vuruştur (0,08–0,30 sn sınırları); iki kenar da yakın değilse, aralık geçersizse veya hizalama 0,15 sn'den kısa kalıyorsa `null` döner. Bir kenar hizalanırsa diğer kenar aynen korunur.
+- 4 regresyon testi: iki kenar/tek kenar hizalama, tolerans dışı ve sessiz içerik, geçersiz aralıklar, iki HTML sayfasındaki gerçek düğme bağları ve VM UI davranışı. Tam Node/Python ve browser CI sonucu commit sonrası kontrol edilmeli; fiziksel iPhone Safari doğrulaması hâlâ gerekli.
+- Tempo tahmini algoritmik ve yerel kalır; bu değişiklik pitch-preserving time-stretch veya otomatik BPM uygulaması değildir. PR #1 ses motoru ve issue #2'nin kalan müzik kalite hedefleri ayrı.

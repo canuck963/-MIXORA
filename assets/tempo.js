@@ -79,6 +79,37 @@ function tempoMatch(a, b, minRate = 0.7, maxRate = 1.3) {
   return {options, recommended, minRate, maxRate, hasInRange: eligible.length > 0};
 }
 
+// Snap selection edges to observed beat attacks without moving either edge beyond tolerance.
+function snapRangeToBeats(buffer, start, end, tolerance) {
+  if (!buffer || !Number.isFinite(buffer.sampleRate) || buffer.sampleRate <= 0 ||
+      !Number.isFinite(buffer.length) || buffer.length <= 0 ||
+      !Number.isFinite(start) || !Number.isFinite(end) || start < 0 ||
+      end > buffer.length / buffer.sampleRate + 0.001 || end - start < 0.15) return null;
+  const analysis = analyzeTempo(buffer, start, end);
+  if (!analysis || !analysis.beats.length) return null;
+  const limit = tolerance === undefined
+    ? Math.min(0.3, Math.max(0.08, 15 / analysis.bpm))
+    : tolerance;
+  if (!Number.isFinite(limit) || limit < 0 || limit > 1) return null;
+  function nearest(time) {
+    let candidate = null, distance = Infinity;
+    for (const beat of analysis.beats) {
+      const delta = Math.abs(beat - time);
+      if (delta <= limit && delta < distance) { candidate = beat; distance = delta; }
+    }
+    return candidate;
+  }
+  const startBeat = nearest(start), endBeat = nearest(end);
+  if (startBeat === null && endBeat === null) return null;
+  const snappedStart = startBeat === null ? start : startBeat;
+  const snappedEnd = endBeat === null ? end : endBeat;
+  if (snappedEnd - snappedStart < 0.15) return null;
+  return {
+    start: snappedStart, end: snappedEnd,
+    snappedStart: startBeat !== null, snappedEnd: endBeat !== null,
+    bpm: analysis.bpm, confidence: analysis.confidence, tolerance: limit
+  };
+}
 function alignOverlayEntry(buffer, start, end, delay) {
   const target = start + delay;
   const pulse = analyzePulse(buffer, Math.max(start, target - 5), Math.min(end, target + 5));
@@ -144,8 +175,28 @@ function emotionalFade(buffer, start, end, maxOverlap) {
   }
   return null;
 }
-if (typeof module === 'object') module.exports = {analyzeTempo, estimateTempo, tempoMatch, alignOverlayEntry, energeticEntry, emotionalFade};
+if (typeof module === 'object') module.exports = {analyzeTempo, estimateTempo, tempoMatch, snapRangeToBeats, alignOverlayEntry, energeticEntry, emotionalFade, bindBeatSnapControls};
 
+function bindBeatSnapControls(selectRange) {
+  for (const id of ['A', 'B']) {
+    const button = $('snap' + id);
+    if (!button) continue;
+    button.onclick = () => {
+      const range = selectRange(id);
+      if (!range || !tracks[id]) return;
+      const result = snapRangeToBeats(tracks[id].buffer, range.start, range.end);
+      if (!result) {
+        note(id + ' bölümünde güvenilir ve yakın vuruş bulunamadı. Kesit değişmedi; daha düzenli bir bölüm dene.');
+        return;
+      }
+      $('start' + id).value = result.start.toFixed(2);
+      $('end' + id).value = result.end.toFixed(2);
+      const edges = [result.snappedStart ? 'başlangıç' : null, result.snappedEnd ? 'bitiş' : null].filter(Boolean).join(' ve ');
+      note(id + ' kesiti ' + edges + ' için gözlenen vuruşa hizalandı · ' + result.bpm +
+        ' BPM · ' + Math.round(result.confidence * 100) + '% güven. Yeni değerleri kontrol edip çizelgeye ekle.');
+    };
+  }
+}
 function bindTempoControls(selectRange) {
   for (const id of ['A', 'B']) {
     $('tempo' + id).onclick = () => {
