@@ -28,6 +28,11 @@ class API(unittest.TestCase):
         self.assertEqual(r['status'],200,r)
         return r['headers']['Set-Cookie'].split(';')[0],r['body']['user']['id']
     def setUp(self):
+        # Never let integration tests inherit a real delivery provider.
+        from unittest.mock import patch
+        mail_env=patch.dict(os.environ,{key:'' for key in ('BREVO_API_KEY','MIXORA_SMTP_HOST','MIXORA_SMTP_FROM','MIXORA_SMTP_USER','MIXORA_SMTP_PASSWORD')})
+        mail_env.start()
+        self.addCleanup(mail_env.stop)
         with server.connect() as db:
             for table in ['comments','likes','posts','sessions','users','limits']:db.execute('DELETE FROM '+table)
     def post(self,cookie):
@@ -57,6 +62,44 @@ class API(unittest.TestCase):
         with server.connect() as db:
             self.assertEqual(db.execute('SELECT count(*) FROM likes').fetchone()[0],0)
             self.assertEqual(db.execute('SELECT count(*) FROM comments').fetchone()[0],0)
+    def test_audio_seek_ranges(self):
+        cookie,_ = self.register()
+        pid,audio = self.post(cookie)
+        path = '/api/posts/' + pid + '/audio'
+        size = len(audio)
+        huge = '9' * 5000
+        for request,start,stop in [
+            ('bytes=0-1', 0, 2), ('bytes=5-', 5, size),
+            ('bytes=-12', size-12, size), ('bytes=9-' + huge, 9, size),
+            ('bytes=-' + huge, 0, size), ('bytes=' + '0'*5000 + '3-6', 3, 7),
+        ]:
+            with self.subTest(request=request[:20]):
+                result = self.call(path, headers={'HTTP_RANGE':request})
+                self.assertEqual(result['status'], 206)
+                self.assertEqual(result['body'], audio[start:stop])
+                self.assertEqual(result['headers']['Content-Range'], f'bytes {start}-{stop-1}/{size}')
+                self.assertEqual(result['headers']['Content-Length'], str(stop-start))
+        for request in ('bytes=-0', 'bytes=8-7', 'bytes=-', 'bytes=' + huge + '-'):
+            result = self.call(path, headers={'HTTP_RANGE':request})
+            self.assertEqual(result['status'], 416)
+            self.assertEqual(result['headers']['Content-Range'], f'bytes */{size}')
+            self.assertIn('error', result['body'])
+
+    def test_like_response_reports_current_count_and_retry_state(self):
+        owner,_ = self.register()
+        other,_ = self.register('other@example.com')
+        pid,_ = self.post(owner)
+        path = '/api/posts/' + pid + '/likes'
+        first = self.call(path, 'POST', cookie=owner)
+        self.assertEqual(first['body'], {'ok':True, 'likes':1, 'liked':True})
+        self.call(path, 'POST', cookie=other)
+        retry = self.call(path, 'POST', cookie=owner)
+        self.assertEqual(retry['body'], {'ok':True, 'likes':2, 'liked':True})
+        for _ in range(2):
+            removed = self.call(path, 'DELETE', cookie=owner)
+            self.assertEqual(removed['body'], {'ok':True, 'likes':1, 'liked':False})
+        self.assertEqual(self.call('/api/posts/'+pid)['body']['likes'], 1)
+
     def test_account_deletion_requires_password_and_cleans_up(self):
         a,uid=self.register()
         b,bid=self.register('b@example.com')
@@ -78,6 +121,11 @@ class API(unittest.TestCase):
         with server.connect() as db:
             self.assertEqual(db.execute('SELECT count(*) FROM sessions WHERE user_id=?',(uid,)).fetchone()[0],0)
             self.assertEqual(db.execute('SELECT count(*) FROM likes').fetchone()[0],0)
+
+    def test_tempo_module_is_served(self):
+        response = self.call('/assets/tempo.js')
+        self.assertEqual(response['status'], 200)
+        self.assertIn(b'function estimateTempo', response['body'])
 
     def test_security(self):
         cookie,_=self.register()
@@ -150,6 +198,24 @@ class API(unittest.TestCase):
         self.assertEqual(page['headers']['Cache-Control'],'no-store')
         self.assertNotIn(b'unique-sensitive-token-456',page['body'])
 
+    def test_reset_page_get_does_not_consume_token(self):
+        import hashlib,time
+        _,uid=self.register()
+        digest=hashlib.sha256(b'reset-page-token').hexdigest()
+        with server.connect() as db:
+            db.execute('INSERT INTO email_tokens VALUES(?,?,?,?)',(digest,uid,'reset',time.time()+1800))
+        for _ in range(2):
+            response=self.call('/api/reset-password?token=reset-page-token')
+            self.assertEqual(response['status'],200)
+            self.assertEqual(response['headers']['Cache-Control'],'no-store')
+            self.assertEqual(response['headers']['Referrer-Policy'],'no-referrer')
+            self.assertIn(b'autocomplete="new-password"',response['body'])
+            self.assertNotIn(b'reset-page-token',response['body'])
+        with server.connect() as db:
+            self.assertIsNotNone(db.execute('SELECT token FROM email_tokens WHERE token=?',(digest,)).fetchone())
+        result=self.call('/api/reset-password','POST',{'token':'reset-page-token','password':'new-safe-password'})
+        self.assertEqual(result['status'],200)
+
     def test_password_reset_is_single_use_and_revokes_sessions(self):
         from unittest.mock import patch
         cookie,uid=self.register()
@@ -177,7 +243,7 @@ class API(unittest.TestCase):
             self.assertEqual(self.call('/api/forgot-password','POST',{'email':'a@example.com'})['status'],503)
             with server.connect() as db:
                 self.assertEqual(db.execute('SELECT count(*) FROM email_tokens').fetchone()[0],0)
-        with patch.dict(os.environ,{'MIXORA_SMTP_HOST':'smtp.test'}), patch.object(server,'send_email',side_effect=OSError('offline')):
+        with patch.dict(os.environ,{'MIXORA_SMTP_HOST':'smtp.test','MIXORA_SMTP_FROM':'test@example.com','MIXORA_SMTP_USER':'test','MIXORA_SMTP_PASSWORD':'test-only'}), patch.object(server,'send_email',side_effect=OSError('offline')):
             self.assertEqual(self.call('/api/register','POST',{'email':'failed@example.com','password':'a-strong-password','name':'DJ'})['status'],503)
             with server.connect() as db:
                 self.assertIsNone(db.execute('SELECT id FROM users WHERE email=?',('failed@example.com',)).fetchone())
