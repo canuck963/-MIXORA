@@ -32,3 +32,19 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Yeni `snapRangeToBeats` yardımcı işlevi BPM analizinin gözlenen düzenli beat konumlarını kullanır. Varsayılan tolerans çeyrek vuruştur (0,08–0,30 sn sınırları); iki kenar da yakın değilse, aralık geçersizse veya hizalama 0,15 sn'den kısa kalıyorsa `null` döner. Bir kenar hizalanırsa diğer kenar aynen korunur.
 - 4 regresyon testi: iki kenar/tek kenar hizalama, tolerans dışı ve sessiz içerik, geçersiz aralıklar, iki HTML sayfasındaki gerçek düğme bağları ve VM UI davranışı. Tam Node/Python ve browser CI sonucu commit sonrası kontrol edilmeli; fiziksel iPhone Safari doğrulaması hâlâ gerekli.
 - Tempo tahmini algoritmik ve yerel kalır; bu değişiklik pitch-preserving time-stretch veya otomatik BPM uygulaması değildir. PR #1 ses motoru ve issue #2'nin kalan müzik kalite hedefleri ayrı.
+
+## 14 Kasım 2026 — DJ deck vuruş başlatma yarışını giderme
+
+- Canlı DJ Studio'daki **B'yi sonraki vuruşta başlat** işlemi artık `assets/beat-align.js` içindeki tek kullanımlı/cancellable scheduler üzerinden yürür. Önceki düz `setTimeout` bekleyişi durdurma veya parça değiştirme sonrasında B'yi gecikmeli başlatabiliyordu.
+- A duraklatılır/sona erer, A veya B kaynak dosyası değişir, kullanıcı manuel olarak iki deck'i başlatır, sayfa kapanır ya da scheduler iptal edilirse bekleyen B başlatması temizlenir. Zamanlayıcı çalıştığında kaynak URL'leri tekrar doğrular; Safari `play()` reddini yakalayıp kullanıcıya tekrar dokunma mesajı verir.
+- A'nın oynatma hızı değişirse bekleme yeniden hesaplanır; wall-clock gecikmesi `playbackRate` ile ölçeklenir. Tam grid noktasında 0 ms yarışına girmemek için bir sonraki tam beat beklenir.
+- Grid hâlâ parça zamanının 0 saniyesine göre varsayılır; gerçek downbeat/ilk vuruş fazı algılanmıyor. Bu nedenle kesin beat-sync veya pitch-preserving time-stretch değildir; arayüz bu sınırı açıkça bildirir.
+- Yeni `tests/beat-align.test.cjs`: **7/7 geçti** (rate-aware delay, on-grid davranışı, invalid BPM/rate, cancel, A pause, ratechange yeniden zamanlama, değişen kaynakta stale play ve Safari play rejection). Test komutu: `node --test tests/beat-align.test.cjs`.
+- GitHub branch/PR #8 üzerinde değişiklikler: [3e617fa](https://github.com/canuck963/-MIXORA/commit/3e617fad48eac96ebbfc47e4a1fb629e3d8da931) modül, [c01ce11](https://github.com/canuck963/-MIXORA/commit/c01ce11f5c96049ab2494bb030fda4445945bb70) test, [5481bb4](https://github.com/canuck963/-MIXORA/commit/5481bb4e23b357bd73faadbb6ba9bd3c198776a0) DJ Studio bağlantısı.
+- Push sonrası tam `node --test tests/*.test.cjs`, `node tests/syntax.cjs`, Python unittest ve Chromium/WebKit CI sonucu ayrıca doğrulanmalı. Fiziksel iPhone Safari, gerçek müzikle kulak testi ve canlı dağıtım yapılmadı.
+
+### Devam işleri
+1. Yeni commit için GitHub Actions tüm Node/syntax/Python/browser adımlarını kontrol et; başarısızlığı düzelt.
+2. iPhone Safari'de A'yı durdurma, rate slider değiştirme, hızlı parça değişimi ve izin reddi sırasında B'nin yanlış başlamadığını doğrula.
+3. Gerçek ilk vuruş/downbeat fazını tahmin edip kullanıcıya güven puanı sun; track-zero varsayımını kaldırmadan önce gerçek davul/senkop örneklerinde ölç.
+4. Issue #2'nin pitch-preserving time-stretch, cümle/kesit kalitesi, WAV/önizleme eşitliği ve gerçek müzik değerlendirmesi hâlâ açık.
