@@ -6,7 +6,7 @@ class FakeAudio extends EventTarget {
   constructor(src,currentTime=0,playbackRate=1,paused=false){
     super();this.src=src;this.currentTime=currentTime;this.playbackRate=playbackRate;this.paused=paused;this.plays=0;this.pauseCalls=0;this.rejectPlay=false;
   }
-  async play(){this.plays++;if(this.rejectPlay)throw new Error('NotAllowedError');this.paused=false;}
+  async play(){this.plays++;if(this.rejectPlay)throw new Error('NotAllowedError');if(this.playDeferred)await this.playDeferred;this.paused=false;}
   pause(){this.pauseCalls++;this.paused=true;this.dispatchEvent(new Event('pause'));}
 }
 function fakeClock(){
@@ -71,4 +71,22 @@ test('Safari play rejection is reported without an unhandled promise',async()=>{
   scheduler.schedule(a,b,120,message=>messages.push(message));
   await clock.run();
   assert.match(messages.at(-1),/Safari/);
+});
+
+test('cancel during a pending iOS play permission promise pauses stale B again on resolution',async()=>{
+  const clock=fakeClock(),scheduler=createBeatScheduler(clock);
+  let resolvePlay;
+  const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
+  b.playDeferred=new Promise(resolve=>{resolvePlay=resolve});
+  scheduler.schedule(a,b,120,()=>{});
+  const job=[...clock.jobs.values()][0];clock.jobs.clear();
+  const pending=job.fn();
+  await Promise.resolve();
+  assert.equal(b.plays,1);
+  scheduler.cancel();
+  assert.equal(b.pauseCalls,1);
+  resolvePlay();
+  await pending;
+  assert.equal(b.pauseCalls,2,'late play resolution must not leave B audible');
+  assert.equal(b.paused,true);
 });
