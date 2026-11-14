@@ -48,3 +48,8 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 2. iPhone Safari'de A'yı durdurma, rate slider değiştirme, hızlı parça değişimi ve izin reddi sırasında B'nin yanlış başlamadığını doğrula.
 3. Gerçek ilk vuruş/downbeat fazını tahmin edip kullanıcıya güven puanı sun; track-zero varsayımını kaldırmadan önce gerçek davul/senkop örneklerinde ölç.
 4. Issue #2'nin pitch-preserving time-stretch, cümle/kesit kalitesi, WAV/önizleme eşitliği ve gerçek müzik değerlendirmesi hâlâ açık.
+
+### 14 Kasım CI ara sonucu — run #135
+
+- [GitHub Actions #135](https://github.com/canuck963/-MIXORA/actions/runs/43602433169), test commit `647fe02` için: `node --test tests/*.test.cjs`, `node tests/syntax.cjs` ve `python -m unittest discover -s tests -v` adımları **başarılı**.
+- Playwright kurulumu (Chromium/WebKit) o anda devam ediyordu; browser test adımı henüz başlamadığı için bu run tam yeşil olarak raporlanmıyor. Fiziksel iPhone testi yine ayrıca gerekli.
