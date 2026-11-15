@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {nextBeatDelaySeconds,createBeatScheduler}=require('../assets/beat-align.js');
+const {nextBeatDelaySeconds,estimateBeatPhase,createBeatScheduler}=require('../assets/beat-align.js');
 
 class FakeAudio extends EventTarget {
   constructor(src,currentTime=0,playbackRate=1,paused=false){
@@ -9,7 +9,7 @@ class FakeAudio extends EventTarget {
   async play(){this.plays++;if(this.rejectPlay)throw new Error('NotAllowedError');if(this.playDeferred)await this.playDeferred;this.paused=false;}
   pause(){this.pauseCalls++;this.paused=true;this.dispatchEvent(new Event('pause'));}
 }
-function fakeClock(){
+function phaseBuffer(rate,bpm,offset=0.73,seconds=12){\n  const length=rate*seconds,data=new Float32Array(length);\n  for(let t=offset;t<seconds-0.1;t+=60/bpm){const from=Math.round(t*rate);data.fill(.7,from,Math.min(length,from+Math.round(.04*rate)));}\n  return {sampleRate:rate,length,numberOfChannels:1,getChannelData:()=>data};\n}\nfunction fakeClock(){
   let next=1;const jobs=new Map();
   return {jobs,setTimeoutFn(fn,ms){const id=next++;jobs.set(id,{fn,ms});return id;},
     clearTimeoutFn(id){jobs.delete(id);},
@@ -19,7 +19,7 @@ function fakeClock(){
 test('next beat delay follows A playback rate and track-zero phase',()=>{
   assert.ok(Math.abs(nextBeatDelaySeconds(1.25,120,1.25)-.2)<1e-12);
   assert.equal(nextBeatDelaySeconds(1,120,1),.5,'an exact grid point schedules the next full beat');
-  assert.ok(Math.abs(nextBeatDelaySeconds(1.25,120,1)-.25)<1e-12);
+  assert.ok(Math.abs(nextBeatDelaySeconds(1.25,120,1)-.25)<1e-12);\n  assert.ok(Math.abs(nextBeatDelaySeconds(1.25,120,1,.1)-.35)<1e-12,'phase offset shifts the next grid point');
 });
 
 test('beat delay rejects invalid time, BPM and playback rate',()=>{
@@ -27,7 +27,24 @@ test('beat delay rejects invalid time, BPM and playback rate',()=>{
     assert.equal(nextBeatDelaySeconds(...args),null);
 });
 
-test('pending B start is removed when the user cancels',async()=>{
+
+test('phase estimator finds a non-zero local beat grid without uploading audio',()=>{
+  const phase=estimateBeatPhase(phaseBuffer(48000,120,.73),120);
+  assert.ok(phase);
+  assert.ok(Math.abs(phase.beatOrigin-.23)<.025);
+  assert.ok(phase.confidence>=.9);
+  assert.ok(phase.detectedAttacks>=10);
+  assert.equal(estimateBeatPhase(phaseBuffer(48000,120),90),null,'a mismatched tempo must not be presented as a reliable phase');
+});
+
+test('scheduler uses the supplied beat phase when calculating its delay',()=>{
+  const clock=fakeClock(),scheduler=createBeatScheduler(clock);
+  const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
+  assert.equal(scheduler.schedule(a,b,120,()=>{},.1),true);
+  assert.equal([...clock.jobs.values()][0].ms,350);
+  scheduler.cancel();
+});
+\ntest('pending B start is removed when the user cancels',async()=>{
   const clock=fakeClock(),scheduler=createBeatScheduler(clock);
   const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
   assert.equal(scheduler.schedule(a,b,120,()=>{}),true);
