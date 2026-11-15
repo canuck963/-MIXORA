@@ -53,3 +53,13 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 
 - [GitHub Actions #135](https://github.com/canuck963/-MIXORA/actions/runs/43602433169), test commit `647fe02` için: `node --test tests/*.test.cjs`, `node tests/syntax.cjs` ve `python -m unittest discover -s tests -v` adımları **başarılı**.
 - Playwright kurulumu (Chromium/WebKit) o anda devam ediyordu; browser test adımı henüz başlamadığı için bu run tam yeşil olarak raporlanmıyor. Fiziksel iPhone testi yine ayrıca gerekli.
+
+## 15 Kasım 2026 — DJ beat phase kestirimi
+
+- assets/beat-align.js içine cihazda çözümlenen ses buffer'ından 10 ms RMS saldırı (onset) zarfıyla beat-grid fazı kestirimi eklendi. Bu bir downbeat/phrase tanıyıcı değildir; yalnızca girilen BPM'e göre düzenli saldırıların fazını bulur.
+- DJ Studio'daki B'yi sonraki vuruşta başlat artık A dosyasını yerelde decode edip fazı tahmin eder; güven düşükse açıkça 0 sn fallback uyarısı verir. Dosya değişimi veya A'nın durması decode sırasında kontrol edilir. AudioContext kapanır ve buton tekrar etkinleşir.
+- nextBeatDelaySeconds ve scheduler faz parametresiyle çalışır; playback-rate değişiminde aynı grid fazı korunur.
+- tests/beat-align.test.cjs: sıfır olmayan faz, BPM uyuşmazlığı, faza göre zamanlayıcı ve önceki iptal/izin yarışları kapsanıyor.
+- Kod commitleri: [ff717eb](https://github.com/canuck963/-MIXORA/commit/ff717eb5d1cd10945d5cdaf8e0e41c74f4aa08b9), [02e0d85](https://github.com/canuck963/-MIXORA/commit/02e0d85842d0b783a882e0efa725e7d557ba11de), [de1e4f6](https://github.com/canuck963/-MIXORA/commit/de1e4f62891e7b5da40f4cf9f43b57691ede211d), test kaynak düzeltmesi [0b8797c](https://github.com/canuck963/-MIXORA/commit/0b8797c3fca10d5e72bbb083cd3a9609a1e5235b), kapsam açıklaması [49e19d6](https://github.com/canuck963/-MIXORA/commit/49e19d6ee8da8358e598c31d27483393d7f0ab7f).
+- Bu run'da GitHub Actions'ın önceki run #139 sonucu success idi (Node, syntax, Python ve browser workflow tamamlandı). Yeni faz değişikliği için CI henüz bekleniyor; GitHub bağlantısı nedeniyle container'da repo klonlayıp Node testlerini yerel çalıştırmak mümkün olmadı.
+- Sonraki kontrol: yeni CI beat-phase testini doğrula; gerçek müzikte faz false-positive oranını dinleyerek değerlendir; iPhone Safari decode bellek/izin davranışını ölç. Faz güveni yalnızca onset uyumudur, müzikal downbeat garantisi değildir.
