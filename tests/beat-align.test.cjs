@@ -9,7 +9,12 @@ class FakeAudio extends EventTarget {
   async play(){this.plays++;if(this.rejectPlay)throw new Error('NotAllowedError');if(this.playDeferred)await this.playDeferred;this.paused=false;}
   pause(){this.pauseCalls++;this.paused=true;this.dispatchEvent(new Event('pause'));}
 }
-function phaseBuffer(rate,bpm,offset=0.73,seconds=12){\n  const length=rate*seconds,data=new Float32Array(length);\n  for(let t=offset;t<seconds-0.1;t+=60/bpm){const from=Math.round(t*rate);data.fill(.7,from,Math.min(length,from+Math.round(.04*rate)));}\n  return {sampleRate:rate,length,numberOfChannels:1,getChannelData:()=>data};\n}\nfunction fakeClock(){
+function phaseBuffer(rate,bpm,offset=0.73,seconds=12){
+  const length=rate*seconds,data=new Float32Array(length);
+  for(let t=offset;t<seconds-0.1;t+=60/bpm){const from=Math.round(t*rate);data.fill(.7,from,Math.min(length,from+Math.round(.04*rate)));}
+  return {sampleRate:rate,length,numberOfChannels:1,getChannelData:()=>data};
+}
+function fakeClock(){
   let next=1;const jobs=new Map();
   return {jobs,setTimeoutFn(fn,ms){const id=next++;jobs.set(id,{fn,ms});return id;},
     clearTimeoutFn(id){jobs.delete(id);},
@@ -19,7 +24,8 @@ function phaseBuffer(rate,bpm,offset=0.73,seconds=12){\n  const length=rate*seco
 test('next beat delay follows A playback rate and track-zero phase',()=>{
   assert.ok(Math.abs(nextBeatDelaySeconds(1.25,120,1.25)-.2)<1e-12);
   assert.equal(nextBeatDelaySeconds(1,120,1),.5,'an exact grid point schedules the next full beat');
-  assert.ok(Math.abs(nextBeatDelaySeconds(1.25,120,1)-.25)<1e-12);\n  assert.ok(Math.abs(nextBeatDelaySeconds(1.25,120,1,.1)-.35)<1e-12,'phase offset shifts the next grid point');
+  assert.ok(Math.abs(nextBeatDelaySeconds(1.25,120,1)-.25)<1e-12);
+  assert.ok(Math.abs(nextBeatDelaySeconds(1.25,120,1,.1)-.35)<1e-12,'phase offset shifts the next grid point');
 });
 
 test('beat delay rejects invalid time, BPM and playback rate',()=>{
@@ -44,7 +50,8 @@ test('scheduler uses the supplied beat phase when calculating its delay',()=>{
   assert.equal([...clock.jobs.values()][0].ms,350);
   scheduler.cancel();
 });
-\ntest('pending B start is removed when the user cancels',async()=>{
+
+test('pending B start is removed when the user cancels',async()=>{
   const clock=fakeClock(),scheduler=createBeatScheduler(clock);
   const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
   assert.equal(scheduler.schedule(a,b,120,()=>{}),true);
