@@ -1,5 +1,5 @@
 // Cancellable, playback-rate-aware beat start for the live DJ decks.
-// Beat phase is anchored at track time 0 until a reliable downbeat detector exists.
+// Local onset phase is estimated; musical downbeat/phrase detection remains out of scope.
 (function (root) {
   'use strict';
 
