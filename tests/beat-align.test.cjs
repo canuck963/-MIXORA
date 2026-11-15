@@ -34,6 +34,16 @@ test('beat delay rejects invalid time, BPM and playback rate',()=>{
 });
 
 
+
+test('DJ start estimates phase from the selected local A file and guards stale decode',()=>{
+  const html=require('node:fs').readFileSync('index.html','utf8');
+  assert.match(html,/window\.mixoraFiles\?\.A/);
+  assert.match(html,/decodeAudioData\(await file\.arrayBuffer\(\)\)/);
+  assert.match(html,/estimateBeatPhase\(decoded,bpm\)/);
+  assert.match(html,/window\.mixoraFiles\?\.A!==file/);
+  assert.match(html,/schedule\(audioA,audioB,bpm,message=>\{\$\('tempoAdvice'\)\.textContent=phaseNote\+message\},origin\)/);
+});
+
 test('phase estimator finds a non-zero local beat grid without uploading audio',()=>{
   const phase=estimateBeatPhase(phaseBuffer(48000,120,.73),120);
   assert.ok(phase);
