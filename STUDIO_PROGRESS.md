@@ -72,3 +72,9 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Scheduler'ın kendi başlattığı `play` olayı `attemptedAudio` ile ayırt edilir; bu olay kendi zamanlayıcısını iptal etmez. Timer anında B'nin hâlâ duraklatılmış ve aynı kaynakta olduğu tekrar doğrulanır.
 - Yeni regresyonlar: B önceden çalarken reddetme, geri sayım sırasında manuel B başlatıldığında iptal, scheduler kaynaklı B play olayının başarıyla tamamlanması.
 - Yerel Node testleri bu otomasyon çalışma alanında doğrudan çalıştırılmadı; commit sonrası GitHub Actions sonucu izlenecek. Fiziksel iPhone Safari ve gerçek müzikle gecikme/ritim doğrulaması hâlâ gerekli.
+
+### CI düzeltmesi — run #159
+
+- İlk CI çalışması [#159](https://github.com/canuck963/-MIXORA/actions/runs/44098623856) yeni scheduler mantığındaki üretim hatasını değil, test çiftindeki varsayılanı yakaladı: FakeAudio B kanalı gerçek HTMLAudioElement gibi varsayılan olarak duraklatılmış başlamalıydı. Önceki test double `paused=false` verdiği için yeni güvenlik kontrolü mevcut testlerde beklenen şekilde zamanlayıcıyı reddetti.
+- FakeAudio varsayılanı `paused=true` yapıldı; A testlerinde açıkça `false` verilmeye devam ediyor. Yeni manuel başlatma testleri B'yi özellikle `false` yaparak yarış durumunu sınar.
+- Düzeltme sonrası tam CI yeniden çalıştırılacak; henüz başarılı olduğu iddia edilmiyor.

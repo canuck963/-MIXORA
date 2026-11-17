@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const {nextBeatDelaySeconds,estimateBeatPhase,createBeatScheduler}=require('../assets/beat-align.js');
 
 class FakeAudio extends EventTarget {
-  constructor(src,currentTime=0,playbackRate=1,paused=false){
+  constructor(src,currentTime=0,playbackRate=1,paused=true){
     super();this.src=src;this.currentTime=currentTime;this.playbackRate=playbackRate;this.paused=paused;this.plays=0;this.pauseCalls=0;this.rejectPlay=false;
   }
   async play(){this.plays++;if(this.rejectPlay)throw new Error('NotAllowedError');if(this.playDeferred)await this.playDeferred;this.paused=false;this.dispatchEvent(new Event('play'));}
