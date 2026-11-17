@@ -6,7 +6,7 @@ class FakeAudio extends EventTarget {
   constructor(src,currentTime=0,playbackRate=1,paused=false){
     super();this.src=src;this.currentTime=currentTime;this.playbackRate=playbackRate;this.paused=paused;this.plays=0;this.pauseCalls=0;this.rejectPlay=false;
   }
-  async play(){this.plays++;if(this.rejectPlay)throw new Error('NotAllowedError');if(this.playDeferred)await this.playDeferred;this.paused=false;}
+  async play(){this.plays++;if(this.rejectPlay)throw new Error('NotAllowedError');if(this.playDeferred)await this.playDeferred;this.paused=false;this.dispatchEvent(new Event('play'));}
   pause(){this.pauseCalls++;this.paused=true;this.dispatchEvent(new Event('pause'));}
 }
 function phaseBuffer(rate,bpm,offset=0.73,seconds=12){
@@ -123,4 +123,36 @@ test('cancel during a pending iOS play permission promise pauses stale B again o
   await pending;
   assert.equal(b.pauseCalls,2,'late play resolution must not leave B audible');
   assert.equal(b.paused,true);
+});
+
+
+test('an already-playing B deck is not reported as a beat-aligned start',()=>{
+  const clock=fakeClock(),scheduler=createBeatScheduler(clock),messages=[];
+  const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
+  b.paused=false;
+  assert.equal(scheduler.schedule(a,b,120,message=>messages.push(message)),false);
+  assert.equal(clock.jobs.size,0);
+  assert.equal(b.plays,0);
+  assert.match(messages.at(-1),/B zaten çalıyor/);
+});
+
+test('manual B playback during the countdown cancels the pending aligned start',()=>{
+  const clock=fakeClock(),scheduler=createBeatScheduler(clock),messages=[];
+  const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
+  assert.equal(scheduler.schedule(a,b,120,message=>messages.push(message)),true);
+  assert.equal(clock.jobs.size,1);
+  b.paused=false;
+  b.dispatchEvent(new Event('play'));
+  assert.equal(clock.jobs.size,0);
+  assert.equal(b.plays,0);
+  assert.match(messages.at(-1),/B elle başlatıldı/);
+});
+
+test('scheduler-owned B play event does not cancel its own aligned start',async()=>{
+  const clock=fakeClock(),scheduler=createBeatScheduler(clock),messages=[];
+  const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
+  assert.equal(scheduler.schedule(a,b,120,message=>messages.push(message)),true);
+  await clock.run();
+  assert.equal(b.plays,1);
+  assert.match(messages.at(-1),/B tahmini vuruşta başlatıldı/);
 });

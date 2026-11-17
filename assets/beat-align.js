@@ -104,6 +104,10 @@
         onStatus('Önce A parçasını çal. Sonraki tahmini vuruşta B başlatılacak.');
         return false;
       }
+      if (!audioB.paused) {
+        onStatus('B zaten çalıyor. Önce B’yi duraklat; hizalı başlatma çalan parçayı yeniden başlatmaz.');
+        return false;
+      }
 
       const getDelay = () => nextBeatDelaySeconds(
         Number(audioA.currentTime), Number(bpm), Number(audioA.playbackRate), Number(beatOrigin)
@@ -125,6 +129,11 @@
       const onPause = () => invalidate('A duraklatıldı; bekleyen B başlatması iptal edildi.');
       const onEnded = () => invalidate('A sona erdi; bekleyen B başlatması iptal edildi.');
       const onSourceChange = () => invalidate('Parça değişti; bekleyen B başlatması iptal edildi.');
+      const onManualBPlay = () => {
+        if (id === generation && attemptedAudio !== audioB) {
+          invalidate('B elle başlatıldı; bekleyen hizalı başlatma iptal edildi.');
+        }
+      };
       const listen = (target, event, handler) => {
         if (!target || typeof target.addEventListener !== 'function') return;
         target.addEventListener(event, handler);
@@ -137,14 +146,23 @@
       listen(audioA, 'ratechange', onRateChange);
       listen(audioB, 'emptied', onSourceChange);
       listen(audioB, 'loadstart', onSourceChange);
+      listen(audioB, 'play', onManualBPlay);
 
       onStatus('B yaklaşık ' + Math.round(initialDelay * 1000) +
         ' ms sonra başlayacak. Grid fazı A dosyasında ' + Number(beatOrigin).toFixed(3) + ' sn; kulakla kontrol et.');
       timer = scheduleTimeout(async () => {
         timer = null;
         if (id !== generation) return;
-        if (audioA.paused || audioA.src !== sourceA || audioB.src !== sourceB) {
+        if (audioA.paused || audioA.src !== sourceA) {
           invalidate('A durdu veya parça değişti; B başlatması iptal edildi.');
+          return;
+        }
+        if (audioB.src !== sourceB) {
+          invalidate('B parçası değişti; bekleyen hizalı başlatma iptal edildi.');
+          return;
+        }
+        if (!audioB.paused) {
+          invalidate('B elle başlatıldı; bekleyen hizalı başlatma iptal edildi.');
           return;
         }
         attemptedAudio = audioB;

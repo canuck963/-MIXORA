@@ -64,3 +64,11 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Bu run'da GitHub Actions'ın önceki run #139 sonucu success idi (Node, syntax, Python ve browser workflow tamamlandı). Yeni faz değişikliği için CI henüz bekleniyor; GitHub bağlantısı nedeniyle container'da repo klonlayıp Node testlerini yerel çalıştırmak mümkün olmadı.
 - Sonraki kontrol: yeni CI beat-phase testini doğrula; gerçek müzikte faz false-positive oranını dinleyerek değerlendir; iPhone Safari decode bellek/izin davranışını ölç. Faz güveni yalnızca onset uyumudur, müzikal downbeat garantisi değildir.
 - Ek HTML regresyonu, DJ düğmesinin seçili yerel A dosyasını decode ettiğini, faz sonucunu scheduler'a aktardığını ve decode sırasında eski dosya referansını reddettiğini doğrular. [Test commit f09134c](https://github.com/canuck963/-MIXORA/commit/f09134cdf36697f1d6b6eea3b7e2bf9bf3d8753b); bu son test commit'i için CI bekleniyor.
+
+## 17 Kasım 2026 — DJ deck B manuel başlatma yarışı
+
+- Önceki scheduler, B deck kullanıcı tarafından geri sayım sırasında elle başlatılırsa bekleyen timer'ı iptal etmiyordu. Timer sonunda `play()` çağrısı zaten çalan parçaya ulaşabiliyor ve arayüz yanlış biçimde “tahmini vuruşta başlatıldı” diyebiliyordu.
+- Scheduler artık B zaten çalıyorsa hizalı başlatmayı reddeder. Bekleme sırasında B'nin `play` olayı kullanıcı tarafından tetiklenirse timer ve dinleyiciler temizlenir; mevcut manuel oynatma durdurulmaz.
+- Scheduler'ın kendi başlattığı `play` olayı `attemptedAudio` ile ayırt edilir; bu olay kendi zamanlayıcısını iptal etmez. Timer anında B'nin hâlâ duraklatılmış ve aynı kaynakta olduğu tekrar doğrulanır.
+- Yeni regresyonlar: B önceden çalarken reddetme, geri sayım sırasında manuel B başlatıldığında iptal, scheduler kaynaklı B play olayının başarıyla tamamlanması.
+- Yerel Node testleri bu otomasyon çalışma alanında doğrudan çalıştırılmadı; commit sonrası GitHub Actions sonucu izlenecek. Fiziksel iPhone Safari ve gerçek müzikle gecikme/ritim doğrulaması hâlâ gerekli.
