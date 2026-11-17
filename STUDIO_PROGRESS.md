@@ -77,7 +77,7 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 
 - İlk CI çalışması [#159](https://github.com/canuck963/-MIXORA/actions/runs/44098623856) yeni scheduler mantığındaki üretim hatasını değil, test çiftindeki varsayılanı yakaladı: FakeAudio B kanalı gerçek HTMLAudioElement gibi varsayılan olarak duraklatılmış başlamalıydı. Önceki test double `paused=false` verdiği için yeni güvenlik kontrolü mevcut testlerde beklenen şekilde zamanlayıcıyı reddetti.
 - FakeAudio varsayılanı `paused=true` yapıldı; A testlerinde açıkça `false` verilmeye devam ediyor. Yeni manuel başlatma testleri B'yi özellikle `false` yaparak yarış durumunu sınar.
-- Düzeltme sonrası tam CI yeniden çalıştırılacak; henüz başarılı olduğu iddia edilmiyor.
+- Commit anında CI bekleniyordu; düzeltme sonrası sonuç aşağıdaki run #161 kaydında başarılı olarak doğrulandı.
 
 
 ### CI sonucu — run #161 (17 Kasım 2026)
