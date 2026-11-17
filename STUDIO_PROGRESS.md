@@ -78,3 +78,14 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - İlk CI çalışması [#159](https://github.com/canuck963/-MIXORA/actions/runs/44098623856) yeni scheduler mantığındaki üretim hatasını değil, test çiftindeki varsayılanı yakaladı: FakeAudio B kanalı gerçek HTMLAudioElement gibi varsayılan olarak duraklatılmış başlamalıydı. Önceki test double `paused=false` verdiği için yeni güvenlik kontrolü mevcut testlerde beklenen şekilde zamanlayıcıyı reddetti.
 - FakeAudio varsayılanı `paused=true` yapıldı; A testlerinde açıkça `false` verilmeye devam ediyor. Yeni manuel başlatma testleri B'yi özellikle `false` yaparak yarış durumunu sınar.
 - Düzeltme sonrası tam CI yeniden çalıştırılacak; henüz başarılı olduğu iddia edilmiyor.
+
+
+### CI sonucu — run #161 (17 Kasım 2026)
+
+- [GitHub Actions #161](https://github.com/canuck963/-MIXORA/actions/runs/44098892853) **başarılı**.
+- Node: **50/50 test geçti** (yeni 3 B-play yarış testi dahil).
+- `node tests/syntax.cjs`: başarılı.
+- Python sunucu paketi: **12/12 test geçti**.
+- Playwright: Chromium ve WebKit mobil stüdyo/topluluk akışları geçti; üç remix önizlemesi, WAV dışa aktarma, proje geri yükleme, yerel kayıt, hesap, yayınlama, beğeni, yorum ve eski canlı deck senaryoları PASS.
+- CI'nin ilk localhost sağlık kontrolü sunucu açılmadan önce bağlantı reddetti; workflow retry döngüsü içinde sunucu hazır oldu ve browser testi başarılı tamamlandı.
+- Bu CI fiziksel iPhone Safari veya gerçek müzikle öznel miks kalitesi doğrulaması değildir.
