@@ -53,6 +53,7 @@
     const totalWeight = events.reduce((sum, event) => sum + event.weight, 0);
     const step = Math.max(0.002, period / 200), tolerance = Math.min(0.075, period * 0.16);
     let bestPhase = 0, bestScore = -Infinity, bestAligned = 0;
+    const phaseScores = [];
     for (let phase = 0; phase < period; phase += step) {
       let score = 0, aligned = 0;
       for (const event of events) {
@@ -60,11 +61,22 @@
         score += event.weight * Math.exp(-0.5 * (distance / tolerance) ** 2);
         if (distance <= tolerance) aligned += event.weight;
       }
+      phaseScores.push({phase, score});
       if (score > bestScore) { bestScore = score; bestPhase = phase; bestAligned = aligned; }
     }
     const confidence = bestAligned / Math.max(1e-12, totalWeight);
-    if (!Number.isFinite(bestPhase) || confidence < 0.35) return null;
-    return {beatOrigin: bestPhase, bpm, period, confidence, detectedAttacks: peaks.length};
+    // A strong score alone is not enough: equally strong offbeat attacks can
+    // support two competing grids. Compare only peaks outside the best grid's
+    // main tolerance lobe so adjacent samples do not count as competitors.
+    const ambiguityWindow = Math.max(step * 3, tolerance * 1.5);
+    let competingScore = 0;
+    for (const candidate of phaseScores) {
+      const distance = Math.abs(((candidate.phase - bestPhase + period / 2) % period + period) % period - period / 2);
+      if (distance > ambiguityWindow) competingScore = Math.max(competingScore, candidate.score);
+    }
+    const phaseMargin = Math.max(0, (bestScore - competingScore) / Math.max(1e-12, bestScore));
+    if (!Number.isFinite(bestPhase) || confidence < 0.35 || phaseMargin < 0.12) return null;
+    return {beatOrigin: bestPhase, bpm, period, confidence, phaseMargin, detectedAttacks: peaks.length};
   }
 
   function createBeatScheduler(options = {}) {
