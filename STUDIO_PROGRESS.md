@@ -89,3 +89,13 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Playwright: Chromium ve WebKit mobil stüdyo/topluluk akışları geçti; üç remix önizlemesi, WAV dışa aktarma, proje geri yükleme, yerel kayıt, hesap, yayınlama, beğeni, yorum ve eski canlı deck senaryoları PASS.
 - CI'nin ilk localhost sağlık kontrolü sunucu açılmadan önce bağlantı reddetti; workflow retry döngüsü içinde sunucu hazır oldu ve browser testi başarılı tamamlandı.
 - Bu CI fiziksel iPhone Safari veya gerçek müzikle öznel miks kalitesi doğrulaması değildir.
+
+
+## 18 Kasım 2026 — Belirsiz vuruş fazında güvenli fallback
+
+- DJ beat-phase analizine ikinci bir güven ölçüsü eklendi: **alternatif faz ayrımı**. En iyi grid skoru, en iyi fazın ana tolerans penceresi dışındaki en güçlü rakip grid ile karşılaştırılır.
+- Aynı güçte beat ve offbeat saldırıları iki eşdeğer fazı destekliyorsa analiz artık rastgele birini seçmez; phaseMargin < 0.12 olduğunda sonuç reddedilir ve DJ Studio açıkça 0 saniye fallback mesajı gösterir.
+- Ana vuruş saldırıları belirgin, senkoplu/offbeat saldırılar daha zayıf olduğunda baskın grid korunur. Mevcut saldırı uyumu (confidence) API alanı korunmuştur; yeni phaseMargin alanı eklenmiştir.
+- Bu değer downbeat veya müzikal cümle güveni değildir; yalnızca girilen BPM'e göre en iyi ve rakip onset-grid ayrımını ölçer. Audio tarayıcıda analiz edilir ve sunucuya yüklenmez.
+- Yeni regresyonlar: eşit güçte yarım-vuruş gridlerinin reddi, daha zayıf offbeat saldırılarında baskın fazın korunması ve UI'nın alternatif faz ayrımını kontrol etmesi.
+- Fiziksel iPhone Safari, gerçek davul/senkop parçalarıyla faz false-positive ölçümü ve pitch-preserving time-stretch hâlâ açık. Bu commit için GitHub Actions sonucu ayrıca doğrulanacak.
