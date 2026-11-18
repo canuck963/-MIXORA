@@ -9,9 +9,13 @@ class FakeAudio extends EventTarget {
   async play(){this.plays++;if(this.rejectPlay)throw new Error('NotAllowedError');if(this.playDeferred)await this.playDeferred;this.paused=false;this.dispatchEvent(new Event('play'));}
   pause(){this.pauseCalls++;this.paused=true;this.dispatchEvent(new Event('pause'));}
 }
-function phaseBuffer(rate,bpm,offset=0.73,seconds=12){
+function phaseBuffer(rate,bpm,offset=0.73,seconds=12,offbeatStrength=0){
   const length=rate*seconds,data=new Float32Array(length);
-  for(let t=offset;t<seconds-0.1;t+=60/bpm){const from=Math.round(t*rate);data.fill(.7,from,Math.min(length,from+Math.round(.04*rate)));}
+  const fillPulse=t=>{const from=Math.round(t*rate);data.fill(.7,from,Math.min(length,from+Math.round(.04*rate)));};
+  for(let t=offset;t<seconds-0.1;t+=60/bpm){
+    fillPulse(t);
+    if(offbeatStrength>0){const from=Math.round((t+30/bpm)*rate);data.fill(offbeatStrength,from,Math.min(length,from+Math.round(.04*rate)));}
+  }
   return {sampleRate:rate,length,numberOfChannels:1,getChannelData:()=>data};
 }
 function fakeClock(){
@@ -49,8 +53,21 @@ test('phase estimator finds a non-zero local beat grid without uploading audio',
   assert.ok(phase);
   assert.ok(Math.abs(phase.beatOrigin-.23)<.025);
   assert.ok(phase.confidence>=.9);
+  assert.ok(phase.phaseMargin>=.12);
   assert.ok(phase.detectedAttacks>=10);
   assert.equal(estimateBeatPhase(phaseBuffer(48000,120),90),null,'a mismatched tempo must not be presented as a reliable phase');
+});
+
+test('phase estimator rejects equally strong beat and offbeat grids as ambiguous',()=>{
+  const phase=estimateBeatPhase(phaseBuffer(48000,120,.73,12,.7),120);
+  assert.equal(phase,null,'two equally strong half-beat grids must fall back instead of choosing arbitrarily');
+});
+
+test('phase estimator keeps a dominant beat grid when quieter syncopated attacks are present',()=>{
+  const phase=estimateBeatPhase(phaseBuffer(48000,120,.73,12,.15),120);
+  assert.ok(phase);
+  assert.ok(Math.abs(phase.beatOrigin-.23)<.025);
+  assert.ok(phase.phaseMargin>=.12);
 });
 
 test('scheduler uses the supplied beat phase when calculating its delay',()=>{
