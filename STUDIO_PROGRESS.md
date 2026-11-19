@@ -101,3 +101,12 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Commitler: algoritma [349cd1c](https://github.com/canuck963/-MIXORA/commit/349cd1c705234128dc83799545c5f72e7199da0e), sentetik regresyonlar [95d5b78](https://github.com/canuck963/-MIXORA/commit/95d5b782a9994c6d5fd08ce32f22785b5d051202), DJ Studio fallback mesajı [4da79ed](https://github.com/canuck963/-MIXORA/commit/4da79ed03128617b415104c1080feb227061380c), UI regresyon kontrolü [9322867](https://github.com/canuck963/-MIXORA/commit/9322867fd6343fb316057761613b979180ddf16e).
 - [GitHub Actions #172](https://github.com/canuck963/-MIXORA/actions/runs/44318084797) **başarılı**: Node **52/52**, HTML/JS syntax, Python **12/12**, Playwright Chromium ve WebKit mobil stüdyo/topluluk senaryoları geçti. Browser adımında ilk localhost sağlık isteği sunucu hazır olmadan reddedildi; workflow retry ile servis hazır oldu ve iki tarayıcı da PASS verdi.
 - Fiziksel iPhone Safari, gerçek davul/senkop parçalarıyla faz false-positive ölçümü ve pitch-preserving time-stretch hâlâ açık. CI sentetik sinyal ve tarayıcı akışını doğrular; gerçek müzikal downbeat veya ses kalitesi garantisi değildir.
+
+## 19 Kasım 2026 — DJ beat scheduler zamanlayıcı gecikmesine karşı koruma
+
+- `assets/beat-align.js` artık bir sonraki vuruşu yalnızca milisaniye gecikmesi olarak değil, A parçasının **hedef medya zamanı** olarak hesaplıyor. `setTimeout` erken tetiklenirse A'nın gerçek `currentTime` değeri hedefe yaklaşana kadar yeniden kontrol ediliyor.
+- Tarayıcı ana iş parçacığı veya iOS arka plan zamanlayıcısı hedef vuruşu kaçırırsa B eski vuruşa geç kalmış biçimde başlatılmıyor; sonraki grid vuruşu bekleniyor. Böylece gecikmiş callback yanlış senkronizasyon başarısı üretmiyor.
+- Geri sayım sırasında A kullanıcının seek/scrub işlemiyle konum değiştirirse bekleyen B başlatması iptal ediliyor.
+- Yeni testler: hedef medya zamanı, erken callback yeniden kontrolü, kaçırılan vuruşta sonraki grid'e geçiş ve seek iptali. Fake clock artık medya saatinin callback anındaki konumunu açıkça simüle ediyor.
+- Bu iyileştirme HTMLAudioElement + JavaScript zamanlayıcısının hassasiyet sınırlarını kaldırmaz; sample-accurate beat sync, downbeat/phrase tespiti veya pitch-preserving time-stretch değildir. Fiziksel iPhone Safari ve gerçek müzikle gecikme ölçümü hâlâ gerekli.
+- Kod ve test commit'leri bu bölümün devamında CI sonucu ile kaydedilecek. PR #1 ayrı taslak, issue #2 açık; `main` ve PR #1 kapsamı değiştirilmedi.
