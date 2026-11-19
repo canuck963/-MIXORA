@@ -3,17 +3,22 @@
 (function (root) {
   'use strict';
 
-  function nextBeatDelaySeconds(currentTime, bpm, playbackRate = 1, beatOrigin = 0) {
-    if (![currentTime, bpm, playbackRate, beatOrigin].every(Number.isFinite) ||
-        currentTime < 0 || bpm < 40 || bpm > 240 || playbackRate <= 0) return null;
+  function nextBeatTargetTimeSeconds(currentTime, bpm, beatOrigin = 0) {
+    if (![currentTime, bpm, beatOrigin].every(Number.isFinite) ||
+        currentTime < 0 || bpm < 40 || bpm > 240) return null;
     const period = 60 / bpm;
     const phase = ((currentTime - beatOrigin) % period + period) % period;
     let remaining = period - phase;
     // Avoid a zero-delay race when the playhead is already on the grid.
     if (remaining <= Math.max(0.025, period * 0.03)) remaining = period;
-    return remaining / playbackRate;
+    return currentTime + remaining;
   }
 
+  function nextBeatDelaySeconds(currentTime, bpm, playbackRate = 1, beatOrigin = 0) {
+    if (!Number.isFinite(playbackRate) || playbackRate <= 0) return null;
+    const target = nextBeatTargetTimeSeconds(currentTime, bpm, beatOrigin);
+    return target === null ? null : (target - currentTime) / playbackRate;
+  }
 
   function estimateBeatPhase(buffer, bpm, maxSeconds = 30) {
     if (!buffer || !Number.isFinite(buffer.sampleRate) || buffer.sampleRate <= 0 ||
@@ -121,12 +126,13 @@
         return false;
       }
 
-      const getDelay = () => nextBeatDelaySeconds(
-        Number(audioA.currentTime), Number(bpm), Number(audioA.playbackRate), Number(beatOrigin)
-      );
-      const initialDelay = getDelay();
+      const currentTime = Number(audioA.currentTime);
+      const playbackRate = Number(audioA.playbackRate);
+      let targetBeatTime = nextBeatTargetTimeSeconds(currentTime, Number(bpm), Number(beatOrigin));
+      const initialDelay = targetBeatTime === null || !Number.isFinite(playbackRate) || playbackRate <= 0
+        ? null : (targetBeatTime - currentTime) / playbackRate;
       if (initialDelay === null) {
-        onStatus('BPM (40–240) veya A oynatma hızı geçersiz.');
+        onStatus('BPM (40–240), A oynatma konumu veya hızı geçersiz.');
         return false;
       }
 
@@ -140,6 +146,7 @@
       };
       const onPause = () => invalidate('A duraklatıldı; bekleyen B başlatması iptal edildi.');
       const onEnded = () => invalidate('A sona erdi; bekleyen B başlatması iptal edildi.');
+      const onSeeking = () => invalidate('A parçasında konum değişti; bekleyen B başlatması iptal edildi.');
       const onSourceChange = () => invalidate('Parça değişti; bekleyen B başlatması iptal edildi.');
       const onManualBPlay = () => {
         if (id === generation && attemptedAudio !== audioB) {
@@ -153,6 +160,7 @@
       };
       listen(audioA, 'pause', onPause);
       listen(audioA, 'ended', onEnded);
+      listen(audioA, 'seeking', onSeeking);
       listen(audioA, 'emptied', onSourceChange);
       listen(audioA, 'loadstart', onSourceChange);
       listen(audioA, 'ratechange', onRateChange);
@@ -162,7 +170,12 @@
 
       onStatus('B yaklaşık ' + Math.round(initialDelay * 1000) +
         ' ms sonra başlayacak. Grid fazı A dosyasında ' + Number(beatOrigin).toFixed(3) + ' sn; kulakla kontrol et.');
-      timer = scheduleTimeout(async () => {
+      const period = 60 / Number(bpm);
+      const timingTolerance = Math.min(0.06, Math.max(0.025, period * 0.08));
+      const queueTargetCheck = delaySeconds => {
+        timer = scheduleTimeout(runAtTarget, Math.max(1, Math.round(delaySeconds * 1000)));
+      };
+      const runAtTarget = async () => {
         timer = null;
         if (id !== generation) return;
         if (audioA.paused || audioA.src !== sourceA) {
@@ -177,6 +190,35 @@
           invalidate('B elle başlatıldı; bekleyen hizalı başlatma iptal edildi.');
           return;
         }
+
+        const now = Number(audioA.currentTime);
+        const rate = Number(audioA.playbackRate);
+        if (!Number.isFinite(now) || now < 0 || !Number.isFinite(rate) || rate <= 0) {
+          invalidate('A oynatma konumu veya hızı geçersiz; B başlatması iptal edildi.');
+          return;
+        }
+
+        const remaining = targetBeatTime - now;
+        if (remaining > timingTolerance) {
+          // setTimeout may fire early while the media clock is still behind.
+          queueTargetCheck(remaining / rate);
+          return;
+        }
+        if (remaining < -timingTolerance) {
+          // A throttled tab or busy main thread can miss the target. Never
+          // start B on a stale beat: move to the next grid point instead.
+          const nextIndex = Math.floor((now - Number(beatOrigin)) / period) + 1;
+          targetBeatTime = Number(beatOrigin) + nextIndex * period;
+          const nextRemaining = targetBeatTime - now;
+          if (!Number.isFinite(nextRemaining) || nextRemaining <= 0) {
+            invalidate('Yeni vuruş zamanı hesaplanamadı; B başlatması iptal edildi.');
+            return;
+          }
+          onStatus('Zamanlayıcı hedef vuruşu kaçırdı; sonraki tahmini vuruş bekleniyor.');
+          queueTargetCheck(nextRemaining / rate);
+          return;
+        }
+
         attemptedAudio = audioB;
         try {
           await audioB.play();
@@ -192,14 +234,15 @@
             removeListeners();
           }
         }
-      }, Math.max(1, Math.round(initialDelay * 1000)));
+      };
+      queueTargetCheck(initialDelay);
       return true;
     }
 
     return { schedule, cancel };
   }
 
-  root.MIXORABeatAlign = { nextBeatDelaySeconds, estimateBeatPhase, createBeatScheduler };
+  root.MIXORABeatAlign = { nextBeatDelaySeconds, nextBeatTargetTimeSeconds, estimateBeatPhase, createBeatScheduler };
   if (typeof module === 'object' && module.exports) {
     module.exports = root.MIXORABeatAlign;
   }
