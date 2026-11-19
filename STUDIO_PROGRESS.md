@@ -109,4 +109,5 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Geri sayım sırasında A kullanıcının seek/scrub işlemiyle konum değiştirirse bekleyen B başlatması iptal ediliyor.
 - Yeni testler: hedef medya zamanı, erken callback yeniden kontrolü, kaçırılan vuruşta sonraki grid'e geçiş ve seek iptali. Fake clock artık medya saatinin callback anındaki konumunu açıkça simüle ediyor.
 - Bu iyileştirme HTMLAudioElement + JavaScript zamanlayıcısının hassasiyet sınırlarını kaldırmaz; sample-accurate beat sync, downbeat/phrase tespiti veya pitch-preserving time-stretch değildir. Fiziksel iPhone Safari ve gerçek müzikle gecikme ölçümü hâlâ gerekli.
-- Kod ve test commit'leri bu bölümün devamında CI sonucu ile kaydedilecek. PR #1 ayrı taslak, issue #2 açık; `main` ve PR #1 kapsamı değiştirilmedi.
+- GitHub Actions [#44538209059](https://github.com/canuck963/-MIXORA/actions/runs/44538209059) **başarılı**: Node **56/56**, HTML/JS sözdizimi ve yerel bağlantılar, Python **12/12**, Playwright Chromium ve WebKit mobil stüdyo/topluluk akışları geçti.
+- Fiziksel iPhone Safari ve gerçek müzikle gecikme/kalite ölçümü hâlâ gerekli. PR #1 ayrı taslak, issue #2 açık; `main` ve PR #1 kapsamı değiştirilmedi.
