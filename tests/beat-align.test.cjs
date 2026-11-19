@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {nextBeatDelaySeconds,estimateBeatPhase,createBeatScheduler}=require('../assets/beat-align.js');
+const {nextBeatDelaySeconds,nextBeatTargetTimeSeconds,estimateBeatPhase,createBeatScheduler}=require('../assets/beat-align.js');
 
 class FakeAudio extends EventTarget {
   constructor(src,currentTime=0,playbackRate=1,paused=true){
@@ -22,7 +22,7 @@ function fakeClock(){
   let next=1;const jobs=new Map();
   return {jobs,setTimeoutFn(fn,ms){const id=next++;jobs.set(id,{fn,ms});return id;},
     clearTimeoutFn(id){jobs.delete(id);},
-    async run(){const first=jobs.entries().next();assert.equal(first.done,false,'timer should be queued');const [id,job]=first.value;jobs.delete(id);await job.fn();return job;}};
+    async run(before){const first=jobs.entries().next();assert.equal(first.done,false,'timer should be queued');const [id,job]=first.value;jobs.delete(id);if(before)before(job);await job.fn();return job;}};
 }
 
 test('next beat delay follows A playback rate and track-zero phase',()=>{
@@ -30,6 +30,13 @@ test('next beat delay follows A playback rate and track-zero phase',()=>{
   assert.equal(nextBeatDelaySeconds(1,120,1),.5,'an exact grid point schedules the next full beat');
   assert.ok(Math.abs(nextBeatDelaySeconds(1.25,120,1)-.25)<1e-12);
   assert.ok(Math.abs(nextBeatDelaySeconds(1.25,120,1,.1)-.35)<1e-12,'phase offset shifts the next grid point');
+});
+
+test('next beat target exposes the exact media-time grid point',()=>{
+  assert.equal(nextBeatTargetTimeSeconds(1.25,120),1.5);
+  assert.ok(Math.abs(nextBeatTargetTimeSeconds(1.25,120,.1)-1.6)<1e-12);
+  assert.equal(nextBeatTargetTimeSeconds(-1,120),null);
+  assert.equal(nextBeatTargetTimeSeconds(1,241),null);
 });
 
 test('beat delay rejects invalid time, BPM and playback rate',()=>{
@@ -80,6 +87,39 @@ test('scheduler uses the supplied beat phase when calculating its delay',()=>{
   scheduler.cancel();
 });
 
+test('scheduler rechecks an early timer and waits until the media clock reaches its target',async()=>{
+  const clock=fakeClock(),scheduler=createBeatScheduler(clock);
+  const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
+  scheduler.schedule(a,b,120,()=>{});
+  assert.equal([...clock.jobs.values()][0].ms,250);
+  await clock.run(()=>{a.currentTime=1.4;});
+  assert.equal(b.plays,0,'an early callback must not start B before the target');
+  assert.equal([...clock.jobs.values()][0].ms,100);
+  await clock.run(()=>{a.currentTime=1.5;});
+  assert.equal(b.plays,1);
+});
+
+test('scheduler skips a missed beat after a delayed callback instead of starting off-grid',async()=>{
+  const clock=fakeClock(),scheduler=createBeatScheduler(clock),messages=[];
+  const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
+  scheduler.schedule(a,b,120,message=>messages.push(message));
+  await clock.run(()=>{a.currentTime=1.62;});
+  assert.equal(b.plays,0,'a late callback must skip the stale beat');
+  assert.equal([...clock.jobs.values()][0].ms,380,'the next grid point is 2.0 seconds');
+  assert.match(messages.at(-1),/hedef vuruşu kaçırdı/);
+  await clock.run(()=>{a.currentTime=2;});
+  assert.equal(b.plays,1);
+});
+
+test('seeking A cancels a pending aligned B start',()=>{
+  const clock=fakeClock(),scheduler=createBeatScheduler(clock);
+  const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
+  scheduler.schedule(a,b,120,()=>{});
+  a.dispatchEvent(new Event('seeking'));
+  assert.equal(clock.jobs.size,0);
+  assert.equal(b.plays,0);
+});
+
 test('pending B start is removed when the user cancels',async()=>{
   const clock=fakeClock(),scheduler=createBeatScheduler(clock);
   const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
@@ -122,7 +162,7 @@ test('Safari play rejection is reported without an unhandled promise',async()=>{
   const clock=fakeClock(),scheduler=createBeatScheduler(clock),messages=[];
   const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');b.rejectPlay=true;
   scheduler.schedule(a,b,120,message=>messages.push(message));
-  await clock.run();
+  await clock.run(()=>{a.currentTime=1.5;});
   assert.match(messages.at(-1),/Safari/);
 });
 
@@ -133,6 +173,7 @@ test('cancel during a pending iOS play permission promise pauses stale B again o
   b.playDeferred=new Promise(resolve=>{resolvePlay=resolve});
   scheduler.schedule(a,b,120,()=>{});
   const job=[...clock.jobs.values()][0];clock.jobs.clear();
+  a.currentTime=1.5;
   const pending=job.fn();
   await Promise.resolve();
   assert.equal(b.plays,1);
@@ -171,7 +212,7 @@ test('scheduler-owned B play event does not cancel its own aligned start',async(
   const clock=fakeClock(),scheduler=createBeatScheduler(clock),messages=[];
   const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
   assert.equal(scheduler.schedule(a,b,120,message=>messages.push(message)),true);
-  await clock.run();
+  await clock.run(()=>{a.currentTime=1.5;});
   assert.equal(b.plays,1);
   assert.match(messages.at(-1),/B tahmini vuruşta başlatıldı/);
 });
