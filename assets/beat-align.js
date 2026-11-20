@@ -91,6 +91,7 @@
     let generation = 0;
     let detach = [];
     let attemptedAudio = null;
+  const staleAttempts = new Set();
 
     function removeListeners() {
       for (const remove of detach) remove();
@@ -105,6 +106,8 @@
       const pendingAttempt = attemptedAudio;
       attemptedAudio = null;
       if (pendingAttempt) {
+        pendingAttempt.cancelled = true;
+        if (pendingAttempt.playPending) staleAttempts.add(pendingAttempt);
         try { pendingAttempt.audio.pause(); } catch (_) {}
       }
     }
@@ -150,7 +153,9 @@
       const onSeeking = () => invalidate('A parçasında konum değişti; bekleyen B başlatması iptal edildi.');
       const onSourceChange = () => invalidate('Parça değişti; bekleyen B başlatması iptal edildi.');
       const onManualBPlay = () => {
-        if (id === generation && attemptedAudio?.audio !== audioB) {
+        const stalePlayPending = [...staleAttempts].some(attempt =>
+          attempt.audio === audioB && attempt.playPending);
+        if (id === generation && attemptedAudio?.audio !== audioB && !stalePlayPending) {
           invalidate('B elle başlatıldı; bekleyen hizalı başlatma iptal edildi.');
         }
       };
@@ -223,10 +228,12 @@
         // Track each play() promise separately. iOS may resolve an older
         // permission-gated promise after a newer beat attempt has taken ownership
         // of the same media element.
-        const attempt = {audio: audioB, generation: id};
+        const attempt = {audio: audioB, generation: id, playPending: true, cancelled: false};
         attemptedAudio = attempt;
         try {
           await audioB.play();
+          attempt.playPending = false;
+          staleAttempts.delete(attempt);
           if (id === generation) onStatus('✓ B tahmini vuruşta başlatıldı. Kulakla kontrol et.');
           else if (attemptedAudio?.audio !== audioB) {
             // No newer scheduler attempt owns this element. A cancelled
@@ -234,6 +241,8 @@
             try { audioB.pause(); } catch (_) {}
           }
         } catch (error) {
+          attempt.playPending = false;
+          staleAttempts.delete(attempt);
           if (id === generation) onStatus('B başlatılamadı. Safari’de B kanalındaki ▶️ düğmesine dokun.');
         } finally {
           // A stale promise must never clear listeners/state belonging to a

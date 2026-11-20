@@ -254,3 +254,40 @@ test('a stale iOS play resolution cannot pause a newer scheduler-owned B attempt
   await secondRun;
   assert.equal(b.paused,false);
 });
+
+test('a cancelled play event does not look like manual B playback while the next beat is queued',async()=>{
+  const clock=fakeClock(),scheduler=createBeatScheduler(clock),resolvePlays=[];
+  const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
+  b.play=()=>{b.plays++;return new Promise(resolve=>resolvePlays.push(()=>{
+    b.paused=false;b.dispatchEvent(new Event('play'));resolve();
+  }));};
+
+  scheduler.schedule(a,b,120,()=>{});
+  const firstJob=[...clock.jobs.values()][0];clock.jobs.clear();
+  a.currentTime=1.5;
+  const firstRun=firstJob.fn();
+  await Promise.resolve();
+  assert.equal(b.plays,1);
+
+  // A rate change cancels the pending permission-gated play and queues a
+  // fresh target. The old promise can still dispatch a play event on B.
+  a.playbackRate=2;a.dispatchEvent(new Event('ratechange'));
+  assert.equal(clock.jobs.size,1);
+  assert.equal(b.pauseCalls,1);
+
+  resolvePlays[0]();
+  await firstRun;
+  assert.equal(clock.jobs.size,1,'the stale play event must not cancel the new beat timer');
+  assert.equal(b.pauseCalls,2,'the stale start is paused after its promise resolves');
+  assert.equal(b.paused,true);
+
+  const secondJob=[...clock.jobs.values()][0];clock.jobs.clear();
+  a.currentTime=2;
+  const secondRun=secondJob.fn();
+  await Promise.resolve();
+  assert.equal(b.plays,2);
+  resolvePlays[1]();
+  await secondRun;
+  assert.equal(b.paused,false);
+  assert.equal(b.pauseCalls,2);
+});
