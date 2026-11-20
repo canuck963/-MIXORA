@@ -91,6 +91,7 @@
     let generation = 0;
     let detach = [];
     let attemptedAudio = null;
+  let latestStartedAttempt = null;
   const staleAttempts = new Set();
 
     function removeListeners() {
@@ -228,15 +229,20 @@
         // Track each play() promise separately. iOS may resolve an older
         // permission-gated promise after a newer beat attempt has taken ownership
         // of the same media element.
-        const attempt = {audio: audioB, generation: id, playPending: true, cancelled: false};
+        const attempt = {audio: audioB, source: sourceB, generation: id, playPending: true};
         attemptedAudio = attempt;
         try {
           await audioB.play();
           attempt.playPending = false;
           staleAttempts.delete(attempt);
-          if (id === generation) onStatus('✓ B tahmini vuruşta başlatıldı. Kulakla kontrol et.');
-          else if (attemptedAudio?.audio !== audioB) {
-            // No newer scheduler attempt owns this element. A cancelled
+          if (id === generation) {
+            latestStartedAttempt = attempt;
+            onStatus('✓ B tahmini vuruşta başlatıldı. Kulakla kontrol et.');
+          } else if (audioB.src === sourceB && attemptedAudio?.audio !== audioB &&
+              !(latestStartedAttempt?.audio === audioB &&
+                latestStartedAttempt.source === sourceB &&
+                latestStartedAttempt.generation > id)) {
+            // No newer scheduler start owns this same source. A cancelled
             // Safari play() promise may still start audio when it resolves.
             try { audioB.pause(); } catch (_) {}
           }

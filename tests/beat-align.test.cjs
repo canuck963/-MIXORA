@@ -244,14 +244,15 @@ test('a stale iOS play resolution cannot pause a newer scheduler-owned B attempt
   await Promise.resolve();
   assert.equal(b.plays,2);
 
-  // The old permission prompt resolves after the new attempt has started.
-  resolvePlays[0]();
-  await firstRun;
-  assert.equal(b.pauseCalls,1,'the stale promise must not pause the newer attempt');
-  assert.equal(b.paused,false);
-
+  // The newer scheduler attempt completes first. The old permission prompt
+  // then resolves after the new playback has already taken ownership.
   resolvePlays[1]();
   await secondRun;
+  assert.equal(b.paused,false);
+
+  resolvePlays[0]();
+  await firstRun;
+  assert.equal(b.pauseCalls,1,'the stale promise must not pause completed newer playback');
   assert.equal(b.paused,false);
 });
 
