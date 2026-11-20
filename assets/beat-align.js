@@ -102,9 +102,10 @@
       if (timer !== null) clearTimeoutFn(timer);
       timer = null;
       removeListeners();
-      if (attemptedAudio) {
-        try { attemptedAudio.pause(); } catch (_) {}
-        attemptedAudio = null;
+      const pendingAttempt = attemptedAudio;
+      attemptedAudio = null;
+      if (pendingAttempt) {
+        try { pendingAttempt.audio.pause(); } catch (_) {}
       }
     }
 
@@ -149,7 +150,7 @@
       const onSeeking = () => invalidate('A parçasında konum değişti; bekleyen B başlatması iptal edildi.');
       const onSourceChange = () => invalidate('Parça değişti; bekleyen B başlatması iptal edildi.');
       const onManualBPlay = () => {
-        if (id === generation && attemptedAudio !== audioB) {
+        if (id === generation && attemptedAudio?.audio !== audioB) {
           invalidate('B elle başlatıldı; bekleyen hizalı başlatma iptal edildi.');
         }
       };
@@ -219,17 +220,25 @@
           return;
         }
 
-        attemptedAudio = audioB;
+        // Track each play() promise separately. iOS may resolve an older
+        // permission-gated promise after a newer beat attempt has taken ownership
+        // of the same media element.
+        const attempt = {audio: audioB, generation: id};
+        attemptedAudio = attempt;
         try {
           await audioB.play();
           if (id === generation) onStatus('✓ B tahmini vuruşta başlatıldı. Kulakla kontrol et.');
-          else {
+          else if (attemptedAudio?.audio !== audioB) {
+            // No newer scheduler attempt owns this element. A cancelled
+            // Safari play() promise may still start audio when it resolves.
             try { audioB.pause(); } catch (_) {}
           }
         } catch (error) {
           if (id === generation) onStatus('B başlatılamadı. Safari’de B kanalındaki ▶️ düğmesine dokun.');
         } finally {
-          if (id === generation) {
+          // A stale promise must never clear listeners/state belonging to a
+          // newer attempt, even when both attempts use the same B element.
+          if (attemptedAudio === attempt) {
             attemptedAudio = null;
             removeListeners();
           }

@@ -216,3 +216,41 @@ test('scheduler-owned B play event does not cancel its own aligned start',async(
   assert.equal(b.plays,1);
   assert.match(messages.at(-1),/B tahmini vuruşta başlatıldı/);
 });
+
+test('a stale iOS play resolution cannot pause a newer scheduler-owned B attempt',async()=>{
+  const clock=fakeClock(),scheduler=createBeatScheduler(clock);
+  const a=new FakeAudio('blob:a',1.25,1,false),b=new FakeAudio('blob:b');
+  const resolvePlays=[];
+  b.play=()=>{b.plays++;return new Promise(resolve=>resolvePlays.push(()=>{
+    b.paused=false;b.dispatchEvent(new Event('play'));resolve();
+  }));};
+
+  scheduler.schedule(a,b,120,()=>{});
+  const firstJob=[...clock.jobs.values()][0];clock.jobs.clear();
+  a.currentTime=1.5;
+  const firstRun=firstJob.fn();
+  await Promise.resolve();
+  assert.equal(b.plays,1,'the first beat attempt should be waiting on the iOS play promise');
+
+  // A rate change cancels that attempt and queues the next beat.
+  a.playbackRate=2;a.dispatchEvent(new Event('ratechange'));
+  assert.equal(b.pauseCalls,1,'cancelling the first attempt pauses B once');
+  assert.equal(clock.jobs.size,1);
+
+  // The new attempt reaches its own target and now owns the same B element.
+  const secondJob=[...clock.jobs.values()][0];clock.jobs.clear();
+  a.currentTime=2;
+  const secondRun=secondJob.fn();
+  await Promise.resolve();
+  assert.equal(b.plays,2);
+
+  // The old permission prompt resolves after the new attempt has started.
+  resolvePlays[0]();
+  await firstRun;
+  assert.equal(b.pauseCalls,1,'the stale promise must not pause the newer attempt');
+  assert.equal(b.paused,false);
+
+  resolvePlays[1]();
+  await secondRun;
+  assert.equal(b.paused,false);
+});
