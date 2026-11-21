@@ -142,3 +142,11 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Yeni regresyon, aynı dosyanın ilk bölümünde belirsiz 72/144, sonraki bölümünde güvenilir 120 BPM varken yalnızca bitiş kenarının hizalanıp 120 BPM raporlanmasını kontrol eder.
 - İlgili testler: eski 72 BPM beklentisi yeni güvenli sözleşmeye uyarlandı; düzensiz transient reddi korunuyor; optional chaining UI kontrolü düzeltildi. GitHub Actions #44913193898/#44913187817'de ilk Node adımı 60/63 geçti ve sonraki adımlar bu nedenle çalışmadı. Yeni commit için tüm CI yeniden çalıştırılacak.
 - Kalan: fiziksel iPhone Safari performansı ve gerçek müzikte BPM/beat-grid doğruluğu; pitch-preserving time-stretch ve üç farklı remix WAV kalite karşılaştırması. PR #1 taslak ve issue #2 açık kalır; main değiştirilmez.
+
+
+### CI sonucu — 21 Kasım, commit 537a6c7
+
+- [PR CI #44913966947](https://github.com/canuck963/-MIXORA/actions/runs/44913966947) ve [push CI #44913962305](https://github.com/canuck963/-MIXORA/actions/runs/44913962305) **başarılı**.
+- Node: **64/64**, HTML/JavaScript syntax: başarılı, Python: **12/12**, Playwright Chromium + WebKit kurulum ve browser akışı: başarılı.
+- Bu doğrulama GitHub Actions üzerinde yapıldı. Depoda `package.json` veya ayrı frontend build script'i bulunmuyor; CI'nın gerçek kontrol zinciri Node testleri, syntax, Python sunucu testleri ve Playwright tarayıcı senaryolarıdır.
+- Fiziksel iPhone Safari, iki gerçek lisanslı/izinli müzik dosyasıyla dinleme testi, perde korumalı time-stretch ve üç WAV kalite karşılaştırması hâlâ yapılmadı.
