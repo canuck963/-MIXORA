@@ -23,7 +23,7 @@ ORIGIN = os.environ.get('MIXORA_ORIGIN', 'http://localhost:8000').rstrip('/')
 SECURE = ORIGIN.startswith('https://')
 MAX_AUDIO = 60 * 1024 * 1024
 STATIC = {'index.html','Remix.html','remix.html','community.html','local-community.html',
-          'assets/platform.css','assets/community.js','assets/studio.js','assets/mix-core.js'}
+          'assets/platform.css','assets/community.js','assets/studio.js','assets/mix-core.js','assets/tempo.js'}
 
 @contextmanager
 def connect():
@@ -122,6 +122,25 @@ def audio_type(data):
     if data[:3] == b'ID3' or (len(data)>1 and data[0]==255 and data[1]&224==224): return 'audio/mpeg'
     if data[4:8] == b'ftyp' and data[8:12] in (b'M4A ',b'isom',b'mp42'): return 'audio/mp4'
     fail(415,'MP3, WAV veya M4A ses dosyası gerekli.')
+
+def audio_range(value, size):
+    match = re.fullmatch(r'bytes=([0-9]*)-([0-9]*)', value, re.IGNORECASE)
+    if not match or not any(match.groups()):
+        return None
+
+    def bounded_offset(digits):
+        # Values beyond the file only need a sentinel, even for very long fields.
+        digits = digits.lstrip('0') or '0'
+        return size if len(digits) > len(str(size)) else min(int(digits), size)
+
+    first, last = match.groups()
+    if first:
+        start = bounded_offset(first)
+        end = min(bounded_offset(last), size - 1) if last else size - 1
+    else:
+        start = size - bounded_offset(last)
+        end = size - 1
+    return (start, end) if start <= end else None
 
 def email_configured():
     api_ready = bool(os.environ.get('BREVO_API_KEY') and os.environ.get('MIXORA_SMTP_FROM'))
@@ -246,8 +265,7 @@ def route(env, db):
         db.execute('DELETE FROM email_tokens WHERE token=?',(digest,))
         return 200,{'ok':True,'message':'E-posta doğrulandı. Giriş yapabilirsin.'},headers
     if path == '/api/reset-password' and method == 'GET':
-        page="""<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MIXORA - Şifre yenile</title><body style="background:#10101b;color:white;font:18px system-ui;max-width:460px;margin:60px auto;padding:20px"><h1>MIXORA</h1><h2>Yeni şifre belirle</h2><form id="reset"><input id="password" type="password" minlength="10" maxlength="128" required placeholder="Yeni şifre (en az 10 karakter)" style="width:100%;padding:14px;box-sizing:border-box"><button style="padding:14px;margin-top:15px">Şifreyi yenile</button></form><p id="result"></p><script>document.querySelector('#reset').addEventListener('submit',async e=>{e.preventDefault();const token=new URLSearchParams(location.search).get('token');const r=await fetch('/api/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,password:document.querySelector('#password').value})});const d=await r.json();document.querySelector('#result').textContent=r.ok?'Şifren değiştirildi. Şimdi giriş yapabilirsin.':(d.error||'İşlem başarısız.');});</script></body></html>"""
-        return 200,page.encode('utf-8'),[('Content-Type','text/html; charset=utf-8')]
+        return 200,(ROOT / 'reset-password.html').read_bytes(),[('Content-Type','text/html; charset=utf-8')]
     if path == '/api/reset-password' and method == 'POST':
         limit(db,'reset:'+env.get('REMOTE_ADDR','unknown'),5,3600)
         data=body(env)
@@ -373,12 +391,10 @@ def route(env, db):
             size=post['size']; start=0; end=size-1; status=200
             rng=env.get('HTTP_RANGE')
             if rng:
-                m=re.fullmatch(r'bytes=(\d*)-(\d*)',rng)
-                if not m or not any(m.groups()): fail(416,'Geçersiz aralık.')
-                a,b=m.groups()
-                if a: start=int(a); end=min(int(b),end) if b else end
-                else: start=max(0,size-int(b))
-                if start>end or start>=size: fail(416,'Geçersiz aralık.')
+                requested = audio_range(rng, size)
+                if requested is None:
+                    return 416, {'error':'Geçersiz aralık.'}, [('Content-Range', f'bytes */{size}'), ('Accept-Ranges','bytes')]
+                start, end = requested
                 status=206; headers.append(('Content-Range',f'bytes {start}-{end}/{size}'))
             audio=db.execute('SELECT substr(audio,?,?) FROM posts WHERE id=?',(start+1,end-start+1,pid)).fetchone()[0]
             headers.extend([('Content-Type',post['mime']),('Accept-Ranges','bytes')])
@@ -396,7 +412,8 @@ def route(env, db):
         if action=='likes' and method in ('POST','DELETE'):
             if method=='POST': db.execute('INSERT OR IGNORE INTO likes VALUES(?,?)',(pid,user['id']))
             else: db.execute('DELETE FROM likes WHERE post_id=? AND user_id=?',(pid,user['id']))
-            return 200,{'ok':True},headers
+            count = db.execute('SELECT count(*) FROM likes WHERE post_id=?',(pid,)).fetchone()[0]
+            return 200,{'ok':True,'likes':count,'liked':method=='POST'},headers
         if action=='comments' and method=='GET':
             rows=db.execute('SELECT c.id,c.body,c.created,u.name,u.id user_id FROM comments c JOIN users u ON u.id=c.user_id WHERE post_id=? ORDER BY c.created DESC LIMIT 100',(pid,)).fetchall()
             return 200,{'comments':[dict(r) for r in rows]},headers
@@ -422,7 +439,9 @@ def application(env,start_response):
         status,payload,headers=500,{'error':'Sunucu hatası. Tekrar dene.'},[]
     if not isinstance(payload,bytes):
         payload=json.dumps(payload,ensure_ascii=False).encode(); headers.append(('Content-Type','application/json; charset=utf-8'))
-    headers.extend([('Content-Length',str(len(payload))),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff'),('Referrer-Policy','strict-origin-when-cross-origin'),('X-Frame-Options','DENY'),('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data: https://i.ytimg.com https://*.ytimg.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")])
+    token_page = env.get('PATH_INFO') in ('/api/verify-email', '/api/reset-password')
+    referrer_policy = 'no-referrer' if token_page else 'strict-origin-when-cross-origin'
+    headers.extend([('Content-Length',str(len(payload))),('Cache-Control','no-store'),('X-Content-Type-Options','nosniff'),('Referrer-Policy',referrer_policy),('X-Frame-Options','DENY'),('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' data: https://i.ytimg.com https://*.ytimg.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")])
     if SECURE: headers.append(('Strict-Transport-Security','max-age=31536000'))
     from http import HTTPStatus
     start_response(f'{status} {HTTPStatus(status).phrase}',headers)

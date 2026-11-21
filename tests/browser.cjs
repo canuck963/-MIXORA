@@ -21,12 +21,30 @@ function wav(hz){const n=44100*2,b=Buffer.alloc(44+n*2);b.write('RIFF');b.writeU
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await page.goto('http://localhost:8000/api/verify-email');assert.equal(await page.locator('#confirm').isDisabled(),true);
  await page.unroute('**/api/verify-email');
+ let resetRequests=0;
+ await page.route('**/api/reset-password',async route=>{
+  if(route.request().method()!=='POST')return route.continue();
+  resetRequests++;assert.equal(route.request().postDataJSON().token,'reset-browser-token');
+  if(resetRequests===1)return route.abort();
+  return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true})});
+ });
+ await page.goto('http://localhost:8000/api/reset-password?token=reset-browser-token');
+ assert.equal(resetRequests,0);assert.equal(new URL(page.url()).search,'');
+ await page.getByLabel('Yeni şifre',{exact:true}).fill('new-browser-password');
+ await page.locator('#confirm').click();await page.waitForFunction(()=>document.getElementById('result').textContent.includes('Yanıt alınamadı'));
+ assert.equal(await page.locator('#confirm').isEnabled(),true);
+ await page.locator('#confirm').click();await page.waitForFunction(()=>document.getElementById('result').textContent.includes('Şifren değiştirildi'));
+ assert.equal(resetRequests,2);assert.equal(await page.locator('#confirm').isDisabled(),true);assert.equal(await page.locator('#password').inputValue(),'');
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.goto('http://localhost:8000/api/reset-password');assert.equal(await page.locator('#confirm').isDisabled(),true);
+ await page.unroute('**/api/reset-password');
  await page.goto('http://localhost:8000/Remix.html');
  for(const id of ['A','B']){await page.locator('#file'+id).setInputFiles({name:id+'.wav',mimeType:'audio/wav',buffer:wav(id==='A'?220:440)});await page.waitForFunction(id=>document.getElementById('name'+id).textContent.includes('.wav'),id);}
  await page.locator('#startA').fill('0.25');await page.locator('#endA').fill('1.75');await page.locator('#startB').fill('0.5');
  for(let i=0;i<3;i++){const before=await page.evaluate(()=>JSON.stringify({clips,fade:document.getElementById('fade').value}));await page.locator('[data-preview="'+i+'"]').click();await page.waitForTimeout(150);assert.equal(await page.evaluate(()=>JSON.stringify({clips,fade:document.getElementById('fade').value})),before);await page.locator('[data-apply="'+i+'"]').click();assert.equal(await page.evaluate(()=>clips[0].start),.25);assert.equal(await page.evaluate(()=>clips[1].start),.5);await page.locator('#play').click();await page.waitForTimeout(150);await page.locator('#stop').click();assert.equal(await page.locator('#clips .clip').count(),2);}
  await page.locator('#saveProject').click();await page.waitForFunction(()=>/saklandı|İşlem tamamlanamadı/.test(document.getElementById('status').textContent));assert.match(await page.locator('#status').textContent(),/saklandı/);
  await page.locator('#clear').click();await page.locator('#restoreProject').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Proje açıldı'));
+ assert.equal(await page.locator('#startA').inputValue(),'0.25');assert.equal(await page.locator('#startB').inputValue(),'0.5');
  const downloadPromise=page.waitForEvent('download');await page.locator('#export').click();const download=await downloadPromise;const path=await download.path();const out=fs.readFileSync(path);assert.equal(out.toString('ascii',0,4),'RIFF');assert.ok(out.length>10000);
  let energy=0;for(let i=44;i<out.length;i+=2)energy+=Math.abs(out.readInt16LE(i));assert.ok(energy>100000,'rendered audio is not silent');
  await page.locator('#saveLocalMix').click();await page.waitForFunction(()=>/Remix kaydedildi|İşlem tamamlanamadı/.test(document.getElementById('status').textContent));assert.match(await page.locator('#status').textContent(),/Remix kaydedildi/);

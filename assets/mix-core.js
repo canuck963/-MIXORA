@@ -6,6 +6,10 @@ function plan(list, fade=1){
   let end=0;const items=[];
   for(const c of list){
     if(!['A','B'].includes(c.id)||!Number.isFinite(c.start)||!Number.isFinite(c.end)||c.start<0||c.end-c.start<.15)throw Error('Geçersiz ses bölümü.');
+    for(const [key,max] of [['volume',1.3],['overVol',1],['impact',1]]){
+      const value=c[key];
+      if(value!=null&&(!Number.isFinite(value)||value<0||value>max))throw Error('Geçersiz ses ayarı.');
+    }
     const dur=c.end-c.start,prev=items.at(-1);
     const delay=c.delay??0;if(!Number.isFinite(delay)||delay<0||delay>420)throw Error('Geçersiz gecikme.');
     const at=!prev?0:c.overlay?prev.at+delay:Math.max(0,end-Math.min(fade,dur/2,prev.dur/2));
