@@ -79,33 +79,8 @@ $('beatAlign').onclick=async()=>{const bpm=Number($('bpmA').value),audioA=$('aud
 
 // MIXORA 0.3 — offline approximate tempo estimation. Files remain on device.
 let bpmBusy=false;
-function estimateTempo(buffer){
-  const sr=buffer.sampleRate, ch=buffer.numberOfChannels;
-  const step=Math.max(1,Math.round(sr/200)); // 200 amplitude frames/s
-  const duration=Math.min(55,buffer.duration);
-  const begin=Math.min(12,Math.max(0,buffer.duration-duration));
-  const start=Math.floor(begin*sr),end=Math.min(buffer.length,start+Math.floor(duration*sr));
-  const data=Array.from({length:Math.min(ch,2)},(_,i)=>buffer.getChannelData(i));
-  const energies=[];
-  for(let i=start;i<end;i+=step){let v=0,n=0;for(let j=i;j<Math.min(end,i+step);j+=4){for(const c of data){const x=c[j];v+=x*x;n++}}energies.push(Math.sqrt(v/Math.max(1,n)))}
-  // Onset strength: positive change of short-term loudness.
-  const hop=step/sr, smooth=4, onsets=[];
-  for(let i=smooth;i<energies.length;i++){
-    let before=0,after=0;for(let j=1;j<=smooth;j++){before+=energies[i-j];after+=energies[Math.min(energies.length-1,i+j-1)]}
-    onsets.push(Math.max(0,(after-before)/smooth));
-  }
-  if(onsets.length<1500)return null;
-  const mean=onsets.reduce((a,b)=>a+b,0)/onsets.length;
-  const values=onsets.map(v=>Math.max(0,v-mean*1.25));
-  let best=null;const scores=[];
-  for(let bpm=70;bpm<=180;bpm++){
-    const lag=Math.round(60/bpm/hop);let score=0,den=0;
-    for(let i=lag;i<values.length;i+=2){score+=values[i]*values[i-lag];den+=values[i]*values[i]}
-    scores.push({bpm,score:score/(den+1e-10)});
-  }
-  scores.sort((a,b)=>b.score-a.score);best=scores[0];
-  if(!best||best.score<0.055)return null;
-  return {bpm:best.bpm,confidence:best.score};
+function estimateDeckTempo(buffer){
+  return analyzeTempo(buffer,0,Math.min(buffer.duration,30));
 }
 $('detectBpm').onclick=async()=>{
  if(bpmBusy)return;
@@ -123,10 +98,20 @@ $('detectBpm').onclick=async()=>{
    try{
     const raw=await f.arrayBuffer();
     const decoded=await context.decodeAudioData(raw);
-    const tempo=estimateTempo(decoded);
-    if(tempo){$('bpm'+id).value=tempo.bpm;$('bpmChip'+id).textContent='🥁 Tahmini BPM: '+tempo.bpm;
-     $('bpmStatus').textContent=id+' için yaklaşık '+tempo.bpm+' BPM bulundu. Sonuç yarım/çift tempo olabilir.';
-    }else{$('bpmChip'+id).textContent='🥁 BPM: belirlenemedi';$('bpmStatus').textContent=id+' için güvenilir BPM ölçülemedi. Manuel girebilirsin.'}
+    const tempo=estimateDeckTempo(decoded);
+    if(tempo?.ambiguous){
+     $('bpm'+id).value='';
+     const candidates=(tempo.candidateBpms||[tempo.bpm]).join('/');
+     $('bpmChip'+id).textContent='🥁 BPM: belirsiz ('+candidates+')';
+     $('bpmStatus').textContent=id+' için tempo belirsiz ('+candidates+' BPM olası). Otomatik öneri doldurulmadı; daha belirgin vuruşlu bölüm seç veya BPM’yi elle gir.';
+    }else if(tempo){
+     $('bpm'+id).value=tempo.bpm;$('bpmChip'+id).textContent='🥁 Tahmini BPM: '+tempo.bpm;
+     $('bpmStatus').textContent=id+' için yaklaşık '+tempo.bpm+' BPM bulundu · saldırı uyumu '+Math.round(tempo.confidence*100)+'%.';
+    }else{
+     $('bpm'+id).value='';
+     $('bpmChip'+id).textContent='🥁 BPM: belirlenemedi';
+     $('bpmStatus').textContent=id+' için güvenilir BPM ölçülemedi. Manuel girebilirsin.';
+    }
    }catch(err){$('bpmStatus').textContent=id+' analiz edilemedi: '+(err.message||'ses çözümlenemedi')}
   }
   if(files.A&&files.B&&$('bpmA').value&&$('bpmB').value){$('analyze').click();$('bpmStatus').textContent='✓ BPM değerleri dolduruldu. Aşağıda yaklaşık uyum sonucu var. Ton/enerji girersen değerlendirme gelişir.'}
@@ -172,4 +157,4 @@ $('startRecording').onclick=async()=>{
 $('stopRecording').onclick=()=>{if(recorder?.state!=='inactive')recorder?.stop();};
 window.addEventListener('pagehide',()=>{window.mixoraBeatStartScheduler?.cancel();if(recorder&&recorder.state!=='inactive')recorder.stop();});
 
-</script><script src="assets/beat-align.js"></script></body></html>
+</script><script src="assets/tempo.js"></script><script src="assets/beat-align.js"></script></body></html>

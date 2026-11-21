@@ -1,22 +1,32 @@
 // Estimate the pulse from regularly spaced energy attacks in a bounded excerpt.
 function analyzePulse(buffer, start, end) {
+  if (!buffer || !Number.isFinite(buffer.sampleRate) || buffer.sampleRate <= 0 ||
+      !Number.isFinite(buffer.length) || buffer.length <= 0 ||
+      !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end - start < 4) return null;
+
   const rate = buffer.sampleRate;
   const first = Math.ceil(start * rate);
   const last = Math.min(buffer.length, Math.floor(Math.min(end, start + 30) * rate));
-  const frame = Math.round(rate * 0.01);
+  const frame = Math.max(1, Math.round(rate * 0.01));
   if (last - first < rate * 4) return null;
 
   const channels = Array.from({length: Math.min(2, buffer.numberOfChannels)},
     (_, index) => buffer.getChannelData(index));
+  if (!channels.length) return null;
+
+  // A 10 ms positive-RMS envelope keeps analysis bounded and works on both
+  // 44.1/48 kHz mobile decoders without uploading the source file.
   const attacks = [];
-  let previous = 0;
-  let strongest = 0;
+  let previous = 0, strongest = 0;
   for (let offset = first; offset + frame <= last; offset += frame) {
-    let power = 0;
+    let power = 0, count = 0;
     for (const channel of channels) {
-      for (let i = offset; i < offset + frame; i += 4) power += channel[i] ** 2;
+      for (let i = offset; i < offset + frame; i += 4) {
+        power += channel[i] * channel[i];
+        count++;
+      }
     }
-    const level = Math.sqrt(power / (Math.ceil(frame / 4) * channels.length));
+    const level = Math.sqrt(power / Math.max(1, count));
     const attack = Math.max(0, level - previous);
     attacks.push(attack);
     strongest = Math.max(strongest, attack);
@@ -26,40 +36,112 @@ function analyzePulse(buffer, start, end) {
 
   const peaks = [];
   for (let i = 1; i < attacks.length - 1; i++) {
-    if (attacks[i] < strongest * 0.20 || attacks[i] < attacks[i - 1] || attacks[i] <= attacks[i + 1]) continue;
+    if (attacks[i] < strongest * 0.20 || attacks[i] < attacks[i - 1] ||
+        attacks[i] <= attacks[i + 1]) continue;
     const prior = peaks.at(-1);
-    if (prior === undefined || (i - prior) * frame >= rate * 0.16) peaks.push(i);
+    if (prior === undefined || (i - prior) * frame / rate >= 0.12) peaks.push(i);
     else if (attacks[i] > attacks[prior]) peaks[peaks.length - 1] = i;
   }
   if (peaks.length < 6) return null;
-  const intervals = peaks.slice(1).map((peak, index) => (peak - peaks[index]) * frame / rate);
-  const sorted = [...intervals].sort((a, b) => a - b);
-  const period = sorted[Math.floor(sorted.length / 2)];
-  const bpm = Math.round(60 / period);
-  const consistent = intervals.filter(interval => Math.abs(interval - period) <= period * 0.08);
-  if (bpm < 60 || bpm > 180 || consistent.length < intervals.length * 0.8) return null;
-  // Average consistent gaps to reduce rounding error from the 10 ms frame grid.
-  const measured = Math.round(60 * consistent.length / consistent.reduce((sum, gap) => sum + gap, 0));
-  if (measured < 60 || measured > 180) return null;
-  // An isolated transient may fall between beats. Require regular gaps on both sides.
-  const regularGap = gap => Math.abs(gap - period) <= period * 0.08;
-  const beats = peaks.filter((_, i) => regularGap(intervals[i - 1]) && regularGap(intervals[i]))
-    .map(peak => (first + peak * frame) / rate);
+
+  const events = peaks.map(index => ({
+    time: (first + index * frame) / rate,
+    weight: attacks[index]
+  }));
+  const totalWeight = events.reduce((sum, event) => sum + event.weight, 0);
+  if (!Number.isFinite(totalWeight) || totalWeight <= 0) return null;
+
+  // Search a bounded BPM grid instead of trusting the median inter-onset
+  // interval. Short syncopated gaps no longer force a false faster tempo.
+  const candidates = [];
+  const phaseSteps = 32;
+  for (let candidateBpm = 60; candidateBpm <= 180.0001; candidateBpm += 0.5) {
+    const period = 60 / candidateBpm;
+    const phaseStep = period / phaseSteps;
+    const tolerance = Math.min(0.08, period * 0.15);
+    const sigma = Math.min(0.04, period * 0.06);
+    let best = {phase: 0, score: -Infinity, coverage: 0, alignedEvents: []};
+
+    for (let step = 0; step < phaseSteps; step++) {
+      const phase = step * phaseStep;
+      let score = 0, alignedWeight = 0;
+      const alignedEvents = [];
+      for (const event of events) {
+        const distance = Math.abs(((event.time - phase + period / 2) % period + period) % period - period / 2);
+        score += event.weight * Math.exp(-0.5 * (distance / sigma) ** 2);
+        if (distance <= tolerance) {
+          alignedWeight += event.weight;
+          alignedEvents.push(event);
+        }
+      }
+      score /= totalWeight;
+      if (score > best.score) {
+        best = {phase, score, coverage: alignedWeight / totalWeight, alignedEvents};
+      }
+    }
+
+    if (best.coverage < 0.25 || !best.alignedEvents.length) continue;
+    const occupiedSlots = new Set(best.alignedEvents.map(event =>
+      Math.round((event.time - best.phase) / period)));
+    const firstSlot = Math.min(...occupiedSlots);
+    const lastSlot = Math.max(...occupiedSlots);
+    const expectedSlots = Math.max(1, lastSlot - firstSlot + 1);
+    const occupancy = occupiedSlots.size / expectedSlots;
+    candidates.push({
+      bpm: candidateBpm,
+      period,
+      phase: best.phase,
+      coverage: best.coverage,
+      score: best.score * (0.7 + 0.3 * occupancy),
+      alignedEvents: best.alignedEvents
+    });
+  }
+
+  candidates.sort((left, right) =>
+    right.score - left.score || right.coverage - left.coverage || left.bpm - right.bpm);
+  const best = candidates[0];
+  if (!best || best.coverage < 0.35) return null;
+
+  // A single onset stream cannot always distinguish (for example) 72 from
+  // 144 BPM. Surface that octave alternative rather than silently guessing.
+  const octaveCandidate = candidates.find(candidate => {
+    const ratio = candidate.bpm / best.bpm;
+    const octaveRelated = Math.abs(ratio - 2) <= 0.015 || Math.abs(ratio - 0.5) <= 0.015;
+    return candidate !== best && octaveRelated &&
+      candidate.coverage >= best.coverage * 0.9 &&
+      candidate.score >= best.score * 0.75;
+  });
+  const bpm = Math.round(best.bpm);
+  const beats = best.alignedEvents.map(event => event.time);
+  let regularIntervals = 0;
+  for (let i = 1; i < beats.length; i++) {
+    if (Math.abs((beats[i] - beats[i - 1]) - best.period) <= best.period * 0.12) {
+      regularIntervals++;
+    }
+  }
+  const candidateBpms = [...new Set([best.bpm, octaveCandidate?.bpm]
+    .filter(Number.isFinite).map(value => Math.round(value)))].sort((a, b) => a - b);
+
   return {
-    bpm: measured,
+    bpm,
     beats,
-    confidence: consistent.length / intervals.length,
-    regularIntervals: consistent.length,
-    totalIntervals: intervals.length,
-    period: 60 / measured,
-    firstBeat: beats[0] ?? null
+    confidence: best.coverage,
+    regularIntervals,
+    totalIntervals: Math.max(0, peaks.length - 1),
+    period: best.period,
+    firstBeat: beats[0] ?? null,
+    ambiguous: best.coverage < 0.58 || Boolean(octaveCandidate),
+    candidateBpms,
+    beatOrigin: best.phase
   };
 }
+
 function analyzeTempo(buffer, start, end) {
   return analyzePulse(buffer, start, end);
 }
 function estimateTempo(buffer, start, end) {
-  return analyzePulse(buffer, start, end)?.bpm ?? null;
+  const analysis = analyzePulse(buffer, start, end);
+  return analysis && !analysis.ambiguous ? analysis.bpm : null;
 }
 
 // Compare B's playback rate against A's beat grid and half/double-time
@@ -94,7 +176,7 @@ function snapRangeToBeats(buffer, start, end, tolerance) {
     : tolerance;
   if (tolerance !== undefined && (!Number.isFinite(tolerance) || tolerance < 0 || tolerance > 1)) return null;
   function nearest(analysis, time) {
-    if (!analysis) return null;
+    if (!analysis || analysis.ambiguous) return null;
     const limit = limitFor(analysis);
     let candidate = null, distance = Infinity;
     for (const beat of analysis.beats) {
@@ -108,7 +190,7 @@ function snapRangeToBeats(buffer, start, end, tolerance) {
   const snappedStart = startBeat === null ? start : startBeat;
   const snappedEnd = endBeat === null ? end : endBeat;
   if (snappedEnd - snappedStart < 0.15) return null;
-  const analyses = [startAnalysis, endAnalysis].filter(Boolean);
+  const analyses = [startAnalysis, endAnalysis].filter(analysis => analysis && !analysis.ambiguous);
   return {
     start: snappedStart, end: snappedEnd,
     snappedStart: startBeat !== null, snappedEnd: endBeat !== null,
@@ -120,7 +202,7 @@ function snapRangeToBeats(buffer, start, end, tolerance) {
 function alignOverlayEntry(buffer, start, end, delay) {
   const target = start + delay;
   const pulse = analyzePulse(buffer, Math.max(start, target - 5), Math.min(end, target + 5));
-  if (!pulse) return null;
+  if (!pulse || pulse.ambiguous) return null;
   let nearest = null;
   for (const beat of pulse.beats) {
     const distance = Math.abs(beat - target);
@@ -211,8 +293,13 @@ function bindTempoControls(selectRange) {
       if (!range) return;
       const analysis = analyzeTempo(tracks[id].buffer, range.start, range.end);
       const bpm = analysis?.bpm;
-      note(id + (bpm ? ' · Tahmini tempo ' + bpm + ' BPM · güven ' + Math.round(analysis.confidence * 100) + '%' :
-        ' · Tempo belirsiz. En az 4 saniyelik, düzenli vuruşlu bir bölüm seç.') + ' Seçimin ilk 30 saniyesine kadar ölçülür.');
+      const candidates = analysis?.candidateBpms?.join(' / ');
+      const status = !analysis
+        ? ' · Tempo belirsiz. En az 4 saniyelik, düzenli vuruşlu bir bölüm seç.'
+        : analysis.ambiguous
+          ? ' · Tempo yorumu belirsiz (' + (candidates || bpm) + ' BPM olası). Otomatik hizalama yapılmadı; daha belirgin vuruşlu bir bölüm seç.'
+          : ' · Tahmini tempo ' + bpm + ' BPM · saldırı uyumu ' + Math.round(analysis.confidence * 100) + '%';
+      note(id + status + ' Seçimin ilk 30 saniyesine kadar ölçülür.');
     };
   }
 
@@ -233,6 +320,14 @@ function bindTempoControls(selectRange) {
       if (!range) { result.textContent = id + ' için geçerli başlangıç/bitiş seç.'; return; }
       analyses[id] = analyzeTempo(tracks[id].buffer, range.start, range.end);
       if (!analyses[id]) { result.textContent = id + ' bölümünde güvenilir tempo bulunamadı. Daha uzun ve düzenli vuruşlu bir kesit dene.'; return; }
+    }
+    const uncertain = ['A', 'B'].filter(id => analyses[id].ambiguous);
+    if (uncertain.length) {
+      const detail = uncertain.map(id => id + ': ' +
+        (analyses[id].candidateBpms?.join(' / ') || analyses[id].bpm) + ' BPM').join(' · ');
+      result.textContent = 'Tempo yorumu belirsiz (' + detail +
+        '). Güvenilir hız önerisi verilmedi; daha belirgin vuruşlu kesit seç.';
+      return;
     }
     const match = tempoMatch(analyses.A.bpm, analyses.B.bpm);
     const summary = document.createElement('p');

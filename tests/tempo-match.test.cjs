@@ -1,12 +1,16 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {analyzeTempo,tempoMatch,snapRangeToBeats}=require('../assets/tempo.js');
+const {analyzeTempo,estimateTempo,tempoMatch,snapRangeToBeats}=require('../assets/tempo.js');
 
-function pulseBuffer(rate,bpm,seconds=12){
+function pulseBuffer(rate,bpm,seconds=12,offbeatStrength=0){
   const length=rate*seconds, left=new Float32Array(length), right=new Float32Array(length);
+  const pulse=(time,strength)=>{
+    const from=Math.round(time*rate),to=Math.min(length,from+Math.round(.04*rate));
+    right.fill(strength,from,to);
+  };
   for(let t=1;t<seconds-0.2;t+=60/bpm){
-    const from=Math.round(t*rate),to=Math.min(length,from+Math.round(.04*rate));
-    right.fill(.7,from,to);
+    pulse(t,.7);
+    if(offbeatStrength>0)pulse(t+30/bpm,offbeatStrength);
   }
   return {sampleRate:rate,length,numberOfChannels:2,getChannelData:i=>i?right:left};
 }
@@ -89,4 +93,62 @@ test('beat snap UI updates only the chosen source and leaves it unchanged when n
   controls.snapB.onclick();
   assert.equal(controls.startB.value,'4.2');assert.equal(controls.endB.value,'9.8');
   assert.match(message,/Kesit değişmedi/);
+});
+
+
+test('tempo estimator keeps the main pulse when quieter syncopated attacks are present',()=>{
+  const buffer=pulseBuffer(48000,120,12,.15);
+  const analysis=analyzeTempo(buffer,0,12);
+  assert.ok(analysis);
+  assert.equal(analysis.bpm,120);
+  assert.equal(analysis.ambiguous,false);
+  assert.ok(analysis.confidence>.75);
+  assert.equal(estimateTempo(buffer,0,12),120);
+});
+
+test('tempo estimator reports half/double-time ambiguity instead of guessing',()=>{
+  const buffer=pulseBuffer(48000,72);
+  const analysis=analyzeTempo(buffer,0,12);
+  assert.ok(analysis);
+  assert.equal(analysis.bpm,72);
+  assert.equal(analysis.ambiguous,true);
+  assert.deepEqual(analysis.candidateBpms,[72,144]);
+  assert.equal(estimateTempo(buffer,0,12),null);
+  assert.equal(snapRangeToBeats(buffer,5.95,9.05),null,
+    'ambiguous tempo must not silently move a selection edge');
+});
+
+test('tempo estimator rejects an equally strong beat/offbeat grid as ambiguous',()=>{
+  const buffer=pulseBuffer(48000,120,12,.7);
+  const analysis=analyzeTempo(buffer,0,12);
+  assert.ok(analysis);
+  assert.equal(analysis.ambiguous,true);
+  assert.ok(analysis.confidence<.58);
+  assert.equal(estimateTempo(buffer,0,12),null);
+});
+
+test('DJ BPM control explains ambiguous half/double tempo and avoids auto confidence',()=>{
+  const fs=require('node:fs'),vm=require('node:vm');
+  const controls={tempoA:{},tempoB:{}};
+  let message='';
+  const buffer=pulseBuffer(48000,72);
+  const scope=vm.createContext({
+    $:id=>controls[id],
+    tracks:{A:{buffer}},
+    note:value=>{message=value;}
+  });
+  vm.runInContext(fs.readFileSync('assets/tempo.js','utf8'),scope);
+  vm.runInContext('bindTempoControls(()=>({start:0,end:12}))',scope);
+  controls.tempoA.onclick();
+  assert.match(message,/belirsiz/i);
+  assert.match(message,/144/);
+  assert.match(message,/otomatik hizalama yapılmadı/i);
+});
+
+test('live DJ deck uses the shared confidence-aware tempo analyzer',()=>{
+  const html=require('node:fs').readFileSync('index.html','utf8');
+  assert.match(html,/<script src="assets\/tempo\.js"><\/script>/);
+  assert.match(html,/function estimateDeckTempo\(buffer\)/);
+  assert.match(html,/analyzeTempo\(buffer,0,Math\.min\(buffer\.duration,30\)\)/);
+  assert.match(html,/tempo\.ambiguous/);
 });

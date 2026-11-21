@@ -121,3 +121,14 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - [GitHub Actions #44748453647](https://github.com/canuck963/-MIXORA/actions/runs/44748453647) tam başarılı: Node test paketi, HTML/JS syntax, Python sunucu testleri ve Playwright Chromium + WebKit tarayıcı akışı geçti.
 - Bu ortamda yerel checkout denenmiş ancak ağ DNS'i `github.com` adresini çözemedi; bu nedenle tam test/build doğrulaması GitHub Actions üzerinden yapılıyor. Ayrı frontend build sistemi yok.
 - Kalan: fiziksel iPhone Safari'de ses izni açıkken hız değiştirme, B deck'i elle başlatma, hızlı tekrar hizalama ve dosya değiştirme senaryoları; iki gerçek şarkıyla kulak testi. Downbeat/phrase detection, pitch-preserving time-stretch ve üç remix WAV kalite karşılaştırması issue #2 kapsamında açık kalır. PR #1 taslak ses motoru ayrı korunur; main ve PR #5 değiştirilmedi.
+
+
+## 21 Kasım 2026 — Senkop ve yarım/çift tempo belirsizliğini güvenli gösterme
+
+- `assets/tempo.js` artık tek bir medyan onset aralığına güvenmek yerine 60–180 BPM arasında sınırlı tempo-grid taraması yapıyor. 10 ms pozitif-RMS onset'leri 32 faz örneğinde puanlanıyor; daha zayıf senkoplu saldırılar ana pulse'u otomatik olarak daha hızlı BPM'e zorlamıyor.
+- Güven, toplam onset enerjisinin seçilen grid toleransına giren payı olarak korunuyor. 72/144 gibi eşit derecede makul yarım/çift zaman yorumları `candidateBpms` ve `ambiguous` ile raporlanıyor. Düşük destekli veya octave-ambiguous sonuçta `estimateTempo` null döner; kesit hizalama ve overlay giriş hizalaması belirsiz grid'i otomatik uygulamaz.
+- Remix Studio tempo düğmesi ve iki BPM karşılaştırması belirsizliği açıkça gösterir. Ana DJ Studio'nun ayrı, eski autocorrelation tahmini kaldırıldı; aynı yerel analiz modülünü kullanıyor ve belirsiz sonuçta BPM alanını doldurmuyor. Dosyalar cihazdan çıkmaz.
+- Yeni sentetik regresyonlar: zayıf offbeat vuruşlarında 120 BPM ana grid'i koruma, 72/144 octave belirsizliği, eşit güçlü beat/offbeat grid'inde güvenli ret, UI uyarısı ve canlı DJ sayfasında ortak analiz modülü.
+- CI push ile otomatik çalışacak. Yerel prototipte 72/100/120/128/160 BPM ve zayıf/eşit offbeat örnekleri denendi; tam depo test paketi henüz çalıştırılmadı.
+- Sınırlar: bu hâlâ 10 ms RMS onset + algoritmik grid puanlamasıdır; müzikal downbeat/4-8-16 bar phrase, tonalite, AI/stem separation veya pitch-preserving time-stretch değildir. 30 saniyeye kadar 241 BPM adayı ve 32 faz taraması iPhone'da gerçek dosyalarla performans ölçümü gerektirir.
+- Sonraki: GitHub CI'nın tüm Node/syntax/Python/Chromium/WebKit adımlarını kontrol et; iPhone Safari'de 72/144 ve senkop örneklerini doğrula; iki izinli gerçek parçayla üç remix WAV/önizleme eşitliğini dinle. Issue #2 ve PR #1 ayrı açık kalır.
