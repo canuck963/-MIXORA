@@ -132,3 +132,13 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - CI push ile otomatik çalışacak. Yerel prototipte 72/100/120/128/160 BPM ve zayıf/eşit offbeat örnekleri denendi; tam depo test paketi henüz çalıştırılmadı.
 - Sınırlar: bu hâlâ 10 ms RMS onset + algoritmik grid puanlamasıdır; müzikal downbeat/4-8-16 bar phrase, tonalite, AI/stem separation veya pitch-preserving time-stretch değildir. 30 saniyeye kadar 241 BPM adayı ve 32 faz taraması iPhone'da gerçek dosyalarla performans ölçümü gerektirir.
 - Sonraki: GitHub CI'nın tüm Node/syntax/Python/Chromium/WebKit adımlarını kontrol et; iPhone Safari'de 72/144 ve senkop örneklerini doğrula; iki izinli gerçek parçayla üç remix WAV/önizleme eşitliğini dinle. Issue #2 ve PR #1 ayrı açık kalır.
+
+
+## 21 Kasım 2026 — BPM güven eşiği ve kesit hizalama raporu düzeltmesi
+
+- İlk CI incelemesinde son tempo-grid commit'inin tam test paketi 60/63 geçti; üç başarısızlığın ikisi eski mix-core testinin 72 BPM'i kesin kabul etmesinden (yeni analiz doğru biçimde 72/144 belirsizliği bildiriyor) ve düzensiz transient dizisinin %62,5 onset enerjisiyle yanlışlıkla kesin sayılmasından kaynaklandı. Üçüncü hata UI testinin optional chaining (tempo?.ambiguous) sözdizimini regex'te hesaba katmamasıydı.
+- Güvenli otomatik BPM eşiği %58'den %70'e yükseltildi. 70% altı enerji desteğinde analiz sonucu kullanıcıya belirsiz gösterilir ve otomatik BPM/beat-snap uygulanmaz. Eski 72/144 belirsizliği davranışı korunur; 100/128/160 BPM düzenli sentetik örnekleri kesin kalır.
+- snapRangeToBeats artık yalnızca gerçekten hizalanan kenarın analizini raporlar. Bir kenarın analiz penceresi belirsiz/boş, diğer kenar güvenilir olduğunda ekranda kullanılmayan pencerenin BPM ve güven yüzdesi gösterilmez.
+- Yeni regresyon, aynı dosyanın ilk bölümünde belirsiz 72/144, sonraki bölümünde güvenilir 120 BPM varken yalnızca bitiş kenarının hizalanıp 120 BPM raporlanmasını kontrol eder.
+- İlgili testler: eski 72 BPM beklentisi yeni güvenli sözleşmeye uyarlandı; düzensiz transient reddi korunuyor; optional chaining UI kontrolü düzeltildi. GitHub Actions #44913193898/#44913187817'de ilk Node adımı 60/63 geçti ve sonraki adımlar bu nedenle çalışmadı. Yeni commit için tüm CI yeniden çalıştırılacak.
+- Kalan: fiziksel iPhone Safari performansı ve gerçek müzikte BPM/beat-grid doğruluğu; pitch-preserving time-stretch ve üç farklı remix WAV kalite karşılaştırması. PR #1 taslak ve issue #2 açık kalır; main değiştirilmez.

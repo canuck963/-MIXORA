@@ -20,7 +20,7 @@ test('suggestions preserve selected phrases without adding synthetic effects',()
  assert.throws(()=>suggestions(120,90,{}));
 });
 
-const {estimateTempo} = require('../assets/tempo.js');
+const {analyzeTempo, estimateTempo} = require('../assets/tempo.js');
 function clickTrack(rate, times) {
   const left = new Float32Array(rate * 12);
   const right = new Float32Array(left.length);
@@ -28,11 +28,21 @@ function clickTrack(rate, times) {
   return {sampleRate: rate, length: left.length, numberOfChannels: 2,
     getChannelData: i => i === 0 ? left : right};
 }
-test('measures selected stereo pulse at different sample rates', () => {
+test('measures selected stereo pulse and safely flags half/double ambiguity at different sample rates', () => {
   for (const rate of [44100, 48000]) for (const bpm of [72, 100, 128, 160]) {
     const times = Array.from({length: 16}, (_, i) => 4.1 + i * 60 / bpm);
     const buffer = clickTrack(rate, times);
-    assert.ok(Math.abs(estimateTempo(buffer, 4, 12) - bpm) <= 1);
+    const analysis = analyzeTempo(buffer, 4, 12);
+    assert.ok(analysis);
+    assert.equal(analysis.bpm, bpm);
+    if (bpm === 72) {
+      assert.equal(analysis.ambiguous, true);
+      assert.ok(analysis.candidateBpms.includes(144));
+      assert.equal(estimateTempo(buffer, 4, 12), null);
+    } else {
+      assert.equal(analysis.ambiguous, false);
+      assert.ok(Math.abs(estimateTempo(buffer, 4, 12) - bpm) <= 1);
+    }
     assert.equal(estimateTempo(buffer, 0, 4), null);
     assert.equal(estimateTempo(buffer, 4, 6), null);
   }

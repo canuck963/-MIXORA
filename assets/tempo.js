@@ -130,7 +130,7 @@ function analyzePulse(buffer, start, end) {
     totalIntervals: Math.max(0, peaks.length - 1),
     period: best.period,
     firstBeat: beats[0] ?? null,
-    ambiguous: best.coverage < 0.58 || Boolean(octaveCandidate),
+    ambiguous: best.coverage < 0.70 || Boolean(octaveCandidate),
     candidateBpms,
     beatOrigin: best.phase
   };
@@ -190,13 +190,17 @@ function snapRangeToBeats(buffer, start, end, tolerance) {
   const snappedStart = startBeat === null ? start : startBeat;
   const snappedEnd = endBeat === null ? end : endBeat;
   if (snappedEnd - snappedStart < 0.15) return null;
-  const analyses = [startAnalysis, endAnalysis].filter(analysis => analysis && !analysis.ambiguous);
+  // Report only the grid(s) that actually moved an edge. A rejected or
+  // unused context window must not leak its BPM/confidence into the result.
+  const usedAnalyses = [];
+  if (startBeat !== null) usedAnalyses.push(startAnalysis);
+  if (endBeat !== null) usedAnalyses.push(endAnalysis);
   return {
     start: snappedStart, end: snappedEnd,
     snappedStart: startBeat !== null, snappedEnd: endBeat !== null,
-    bpm: startAnalysis?.bpm ?? endAnalysis.bpm,
-    confidence: Math.min(...analyses.map(analysis => analysis.confidence)),
-    tolerance: tolerance ?? Math.min(...analyses.map(analysis => limitFor(analysis)))
+    bpm: usedAnalyses[0].bpm,
+    confidence: Math.min(...usedAnalyses.map(analysis => analysis.confidence)),
+    tolerance: tolerance ?? Math.min(...usedAnalyses.map(analysis => limitFor(analysis)))
   };
 }
 function alignOverlayEntry(buffer, start, end, delay) {

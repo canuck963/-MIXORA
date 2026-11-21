@@ -66,6 +66,27 @@ test('beat snapping aligns only nearby selection edges and preserves valid durat
   assert.equal(oneEdge.snappedEnd,false);
   assert.equal(oneEdge.end,9.8);
 });
+
+function mixedTempoBuffer(){
+  const rate=48000,length=rate*30,right=new Float32Array(length);
+  const pulse=time=>{
+    const from=Math.round(time*rate),to=Math.min(length,from+Math.round(.04*rate));
+    right.fill(.7,from,to);
+  };
+  for(let time=1;time<11;time+=60/72)pulse(time);
+  for(let time=19;time<29;time+=.5)pulse(time);
+  return {sampleRate:rate,length,numberOfChannels:1,getChannelData:()=>right};
+}
+
+test('beat snap reports the BPM of the edge it actually aligned when the other window is ambiguous',()=>{
+  const result=snapRangeToBeats(mixedTempoBuffer(),6.04,24.04);
+  assert.ok(result);
+  assert.equal(result.snappedStart,false);
+  assert.equal(result.snappedEnd,true);
+  assert.equal(result.bpm,120);
+  assert.ok(Math.abs(result.end-24)<.03);
+});
+
 test('beat snapping rejects invalid ranges, tolerance and quiet material',()=>{
   const buffer=pulseBuffer(48000,120);
   for(const args of [[buffer,-1,5],[buffer,2,1],[buffer,0,12.1],[buffer,0,0.1],[buffer,1,5,NaN],[buffer,1,5,-.1],[buffer,1,5,1.1]])
@@ -150,5 +171,5 @@ test('live DJ deck uses the shared confidence-aware tempo analyzer',()=>{
   assert.match(html,/<script src="assets\/tempo\.js"><\/script>/);
   assert.match(html,/function estimateDeckTempo\(buffer\)/);
   assert.match(html,/analyzeTempo\(buffer,0,Math\.min\(buffer\.duration,30\)\)/);
-  assert.match(html,/tempo\.ambiguous/);
+  assert.match(html,/tempo\??\.ambiguous/);
 });
