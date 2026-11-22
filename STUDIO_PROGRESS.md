@@ -177,3 +177,9 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Dokümantasyon commit'inin PR CI ilk denemesinde Chromium geçti; WebKit, beğeni API'si 200 döndükten sonra global akışta tam olarak `♥ 1` ararken zaman aşımına uğradı. Bu kontrol, akışta başka beğeniler varsa veya ilk eşleşen kart farklıysa kırılgandı.
 - `tests/browser.cjs` artık global ve sabit sayıyı aramak yerine tıklanan kartın düğmesinin beğenilmiş duruma geçmesini bekler. Böylece test, doğru kartın gerçek UI durumunu doğrular.
 - Düzeltme commit'i: [b710d49](https://github.com/canuck963/-MIXORA/commit/b710d49d34d97fc975936dd3b52ef67b82401c49). Yeni CI sonucu ayrıca kontrol edilecek; ilk WebKit başarısızlığı gizlenmedi.
+
+
+### 22 Kasım — Beğeni tarayıcı testi hedefini yeni yayımlanan karta sabitleme
+- İlk kart-bazlı bekleme denemesi de WebKit'te kalp karakterine göre locator ararken zaman aşımına uğradı. Bu nedenle test, Unicode kalp metnine göre kart bulmak yerine yayımlama sonrası URL'deki `post` kimliğini alır ve yalnızca `#post-<id>` kartının ilk `.actions` düğmesini kullanır.
+- Yeni remix'in başlangıçta beğenilmemiş olduğu doğrulanır; POST yanıtından sonra aynı düğmenin beğenilmiş duruma geçtiği beklenir. Böylece hem kart seçimi hem durum geçişi açıkça sınanır.
+- Düzeltme commit'i: [a130ce6](https://github.com/canuck963/-MIXORA/commit/a130ce638b57c9b44bb4d25d1530c0d6a72f6dc0). Push ve PR Chromium/WebKit CI sonucu bekleniyor.
