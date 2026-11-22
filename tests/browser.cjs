@@ -59,7 +59,7 @@ function wav(hz){const n=44100*2,b=Buffer.alloc(44+n*2);b.write('RIFF');b.writeU
   await page.locator('#'+id).click();await page.waitForFunction(text=>document.getElementById('status').textContent===text,path+' gönderildi');await page.unroute('**/api/'+path);
  }
  await page.locator('#password').fill('browser-safe-password');await page.locator('#register').click();await page.waitForSelector('#profile:not(.hidden)');
- await page.locator('#title').fill('Tarayıcı remix testi');await page.locator('#audioFile').setInputFiles({name:'mix.wav',mimeType:'audio/wav',buffer:out});await page.locator('#rights').check();await page.locator('#publishBtn').click();await page.waitForSelector('.post audio');
+  await page.locator('#title').fill('Tarayıcı remix testi');await page.locator('#audioFile').setInputFiles({name:'mix.wav',mimeType:'audio/wav',buffer:out});await page.locator('#rights').check();await page.locator('#publishBtn').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Remixin yayımlandı'));await page.waitForSelector('.post audio');
   const postId=new URL(page.url()).searchParams.get('post');assert.ok(postId,name+' published post URL is missing its id');
   const postCard=page.locator('#post-'+postId);await postCard.waitFor();
   const likeButton=postCard.locator('.actions button').first();
