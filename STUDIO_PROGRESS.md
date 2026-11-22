@@ -183,3 +183,9 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - İlk kart-bazlı bekleme denemesi de WebKit'te kalp karakterine göre locator ararken zaman aşımına uğradı. Bu nedenle test, Unicode kalp metnine göre kart bulmak yerine yayımlama sonrası URL'deki `post` kimliğini alır ve yalnızca `#post-<id>` kartının ilk `.actions` düğmesini kullanır.
 - Yeni remix'in başlangıçta beğenilmemiş olduğu doğrulanır; POST yanıtından sonra aynı düğmenin beğenilmiş duruma geçtiği beklenir. Böylece hem kart seçimi hem durum geçişi açıkça sınanır.
 - Düzeltme commit'i: [a130ce6](https://github.com/canuck963/-MIXORA/commit/a130ce638b57c9b44bb4d25d1530c0d6a72f6dc0). Push ve PR Chromium/WebKit CI sonucu bekleniyor.
+
+
+### 22 Kasım — Yayın tamamlanmadan akış kartını seçme yarışını giderme
+- WebKit'te yeni post için `waitForSelector('.post audio')` eski akış kartı nedeniyle erken tamamlanabiliyordu. Bu yüzden URL henüz `?post=<id>` olmadan test eski kartı seçiyor ve yeni post ID'sini bulamıyordu.
+- Browser testi artık yayın düğmesinden sonra uygulamanın `Remixin yayımlandı` durumunu bekliyor; ardından URL'deki yeni post ID ve o karta ait beğeni düğmesi doğrulanıyor.
+- Düzeltme commit'i: [c775745](https://github.com/canuck963/-MIXORA/commit/c775745363f1a9a04466e12d1e7c5a1df2d43174). Yeni CI sonucu bekleniyor.
