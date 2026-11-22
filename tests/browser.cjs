@@ -46,7 +46,7 @@ function wav(hz){const n=44100*2,b=Buffer.alloc(44+n*2);b.write('RIFF');b.writeU
  await page.locator('#clear').click();await page.locator('#restoreProject').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Proje açıldı'));
  assert.equal(await page.locator('#startA').inputValue(),'0.25');assert.equal(await page.locator('#startB').inputValue(),'0.5');
  const downloadPromise=page.waitForEvent('download');await page.locator('#export').click();const download=await downloadPromise;const path=await download.path();const out=fs.readFileSync(path);assert.equal(out.toString('ascii',0,4),'RIFF');assert.ok(out.length>10000);
- let energy=0;for(let i=44;i<out.length;i+=2)energy+=Math.abs(out.readInt16LE(i));assert.ok(energy>100000,'rendered audio is not silent');
+ let energy=0,peak=0;for(let i=44;i<out.length;i+=2){const sample=out.readInt16LE(i)/32768;energy+=Math.abs(out.readInt16LE(i));peak=Math.max(peak,Math.abs(sample));}assert.ok(energy>100000,'rendered audio is not silent');assert.ok(peak<=Math.pow(10,-1/20)+1/32768,'WAV sample peak exceeds the -1 dBFS ceiling');
  await page.locator('#saveLocalMix').click();await page.waitForFunction(()=>/Remix kaydedildi|İşlem tamamlanamadı/.test(document.getElementById('status').textContent));assert.match(await page.locator('#status').textContent(),/Remix kaydedildi/);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await page.screenshot({path:'/tmp/mixora-studio-'+name+'.png',fullPage:true});

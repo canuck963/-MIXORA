@@ -5,7 +5,7 @@ This change retains the original live DJ page and both manual remix editors, and
 ## What works
 
 - `index.html`: existing library, approximate BPM analysis, tempo controls and hybrid transition; added three-band EQ, cue points, whole-track loop, Web Audio gain control for the crossfader, shared compressor and MediaRecorder capture (format depends on browser).
-- `Remix.html`: existing waveform selection, timeline reordering, overlays, ducking, cinematic/drop effects and WAV export. Added three deterministic remix suggestions, shared master compression, composite gain envelopes, IndexedDB project save/restore (including sources), and rendered WAV saving into the existing local community database.
+- `Remix.html`: existing waveform selection, timeline reordering, overlays, ducking, cinematic/drop effects and WAV export. Added three deterministic remix suggestions, shared master compression, composite gain envelopes, IndexedDB project save/restore (including sources), and rendered WAV saving into the existing local community database. WAV export applies an attenuation-only -1 dBFS sample-peak ceiling across both channels before 16-bit PCM encoding; quiet mixes are never boosted. This is not loudness normalization or a true-peak limiter.
 - `remix.html`: original basic editor retained at its original URL.
 - `local-community.html`: original community demo, retaining `mixora-community-demo` database compatibility. Existing device records remain accessible.
 - `community.html` + `server.py`: registration/login/logout, public name/bio profiles, public uploads/playback/link sharing, idempotent likes, comments and owner-only deletion. Reads are public; writes require a session. Twenty-post feed pages, up to 100 recent comments per post.

@@ -281,3 +281,37 @@ test('rejects corrupt gain controls while accepting legacy defaults and supporte
   }
   assert.equal(plan([clip]).length,2);
 });
+
+
+test('WAV peak ceiling attenuates every channel to -1 dBFS without boosting quiet mixes', () => {
+  const channels = [
+    Float32Array.from([0.5, -0.4, 1.5]),
+    Float32Array.from([-1.2, 0.2, 0])
+  ];
+  const buffer = {numberOfChannels:2,length:3,sampleRate:44100,getChannelData:i=>channels[i]};
+  const result = require('../assets/mix-core.js').applyPeakCeiling(buffer, -1);
+  const ceiling = Math.pow(10, -1 / 20);
+  assert.ok(result.gain < 1);
+  assert.ok(Math.abs(result.peakAfter - ceiling) < 1e-6);
+  for (const channel of channels) for (const sample of channel) assert.ok(Math.abs(sample) <= ceiling + 1e-6);
+
+  const quiet = Float32Array.from([0.1, -0.2, 0.05]);
+  const quietBuffer = {numberOfChannels:1,length:3,sampleRate:44100,getChannelData:()=>quiet};
+  const quietResult = require('../assets/mix-core.js').applyPeakCeiling(quietBuffer, -1);
+  assert.equal(quietResult.gain, 1);
+  assert.deepEqual([...quiet], [0.1, -0.2, 0.05]);
+
+  const silent = new Float32Array(3);
+  const silentResult = require('../assets/mix-core.js').applyPeakCeiling(
+    {numberOfChannels:1,length:3,sampleRate:44100,getChannelData:()=>silent}, -1);
+  assert.equal(silentResult.gain, 1);
+  assert.equal(silentResult.peakAfter, 0);
+});
+
+test('WAV peak ceiling rejects malformed buffers and non-finite samples before mutation', () => {
+  const apply = require('../assets/mix-core.js').applyPeakCeiling;
+  assert.throws(() => apply(null), /ses tamponu/);
+  assert.throws(() => apply({numberOfChannels:1,length:1,sampleRate:44100,getChannelData:()=>new Float32Array(1)}, 0), /Tepe sınırı/);
+  assert.throws(() => apply({numberOfChannels:1,length:1,sampleRate:44100,getChannelData:()=>Float32Array.from([NaN])}), /geçersiz örnek/);
+  assert.throws(() => apply({numberOfChannels:1,length:1,sampleRate:44100,getChannelData:()=>new Float32Array(1)}, -13), /Tepe sınırı/);
+});

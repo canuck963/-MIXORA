@@ -196,3 +196,11 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Node **64/64**, syntax başarılı, Python **12/12**, Playwright Chromium + WebKit kurulum ve browser akışları başarılı.
 - WebKit akış testinde önce eski kartın erken bulunması ve sabit beğeni sayısı varsayımı vardı. Test, yayın tamamlanmasını bekleyip URL'deki yeni post ID'sini ve o karta ait beğeni durumunu doğrulayacak şekilde düzeltildi.
 - Sonraki işler: fiziksel iPhone Safari; kullanım hakkı bulunan gerçek iki şarkıyla beat-grid/phase ve drift dinleme ölçümü; pitch-preserving time-stretch; üç remix WAV çıktısının kalite karşılaştırması; gerçek e-posta teslimatı/üretim dağıtımı. Bu CI sonuçları gerçek cihaz veya müzikal kalite onayı değildir.
+
+
+## 22 Kasım 2026 — WAV dışa aktarmada örnek tepe seviyesi güvenliği
+- `assets/mix-core.js` içine `applyPeakCeiling(buffer, -1)` eklendi. Render edilmiş AudioBuffer'ın bütün kanallarını tarar; örneklerde NaN/Infinity varsa dışa aktarmayı reddeder. Tepe -1 dBFS sınırını aşıyorsa tüm kanallara aynı attenuation uygulanır; stereo denge/faz korunur ve düşük seviyeli miks asla yükseltilmez.
+- Gelişmiş `Remix.html` WAV dışa aktarma akışı, OfflineAudioContext render'ından sonra ve 16-bit PCM kodlamasından önce bu işlemi çağırır. Arayüz kullanıcıya örnek tepe sınırını bildirir.
+- `tests/mix-core.test.cjs`: çok kanallı attenuation, sessiz/quiet sinyalde gain=1, geçersiz sınır ve non-finite örnek testleri eklendi. `tests/browser.cjs` indirilen gerçek WAV örneklerini okuyup sample peak'in -1 dBFS tavanını aşmadığını doğrular.
+- Sınır: bu sample-peak ceiling'dir; inter-sample true-peak limiter, LUFS loudness normalization veya mastering değildir. Çok yüksek miksleri yalnızca kısar; preview ile mutlak loudness farkı olabilir. Gerçek müzikte dinleme ve iPhone bellek testi hâlâ gerekir.
+- Sonraki: yeni push/PR CI'da Node, syntax, Python, Chromium ve WebKit sonuçlarını kontrol et; iki kullanım hakkı bulunan parçada preview/WAV peak ve subjektif geçiş kalitesini dinle; iPhone Safari'de uzun export bellek davranışını ölç. Pitch-preserving time-stretch, phrase/downbeat tespiti, gerçek SMTP ve canlı dağıtım açık.
