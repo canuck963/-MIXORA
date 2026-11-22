@@ -171,3 +171,9 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Node: **64/64**; HTML/JavaScript syntax: başarılı; Python sunucu testleri: **12/12**; Playwright Chromium + WebKit kurulumu ve browser akışı: başarılı.
 - İlk kod commit'inde 63/64 testi geçiren yeni test fixture'ı çeyrek-beat toleransını 35 ms aşıyordu; güvenli fallback doğru davranmıştı. Fixture 100 ms yakınlığa alındı, 120/110 BPM drift fallback senaryosu korundu ve sonraki iki CI çalışması tamamen geçti.
 - Fiziksel iPhone Safari ve iki gerçek, kullanım hakkı bulunan parça ile ses kalitesi/tempo drift doğrulaması yapılmadı. Bu sonuçlar canlı cihaz veya müzikal kalite onayı değildir.
+
+
+### 22 Kasım — WebKit beğeni testi için kart bazlı bekleme
+- Dokümantasyon commit'inin PR CI ilk denemesinde Chromium geçti; WebKit, beğeni API'si 200 döndükten sonra global akışta tam olarak `♥ 1` ararken zaman aşımına uğradı. Bu kontrol, akışta başka beğeniler varsa veya ilk eşleşen kart farklıysa kırılgandı.
+- `tests/browser.cjs` artık global ve sabit sayıyı aramak yerine tıklanan kartın düğmesinin beğenilmiş duruma geçmesini bekler. Böylece test, doğru kartın gerçek UI durumunu doğrular.
+- Düzeltme commit'i: [b710d49](https://github.com/canuck963/-MIXORA/commit/b710d49d34d97fc975936dd3b52ef67b82401c49). Yeni CI sonucu ayrıca kontrol edilecek; ilk WebKit başarısızlığı gizlenmedi.
