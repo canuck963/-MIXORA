@@ -164,3 +164,10 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 ### 22 Kasım — çift kaynak hizalama test eşiği düzeltmesi
 - İlk CI (#45030418255 / #45030423470) 63/64 Node testi geçti. Yeni sinematik testte A vuruşu planlanan girişten 160 ms uzaktı; algoritmanın çeyrek-vuruş toleransı 120 BPM'de 125 ms olduğundan güvenli fallback doğru çalıştı. Hata algoritmada değil, testin hizalanabilir örnek varsayımındaydı.
 - Sentetik A vuruşu 100 ms farkla hizalanabilir konuma alındı; 120/110 BPM drift reddi ayrı senaryo olarak korunuyor. Yeni CI çalışması bu test düzeltmesini doğrulayacak.
+
+
+### Son CI doğrulaması — 22 Kasım 2026, commit 53fcfd7
+- [Push workflow #45030548801](https://github.com/canuck963/-MIXORA/actions/runs/45030548801) ve [PR workflow #45030555127](https://github.com/canuck963/-MIXORA/actions/runs/45030555127) **başarılı**.
+- Node: **64/64**; HTML/JavaScript syntax: başarılı; Python sunucu testleri: **12/12**; Playwright Chromium + WebKit kurulumu ve browser akışı: başarılı.
+- İlk kod commit'inde 63/64 testi geçiren yeni test fixture'ı çeyrek-beat toleransını 35 ms aşıyordu; güvenli fallback doğru davranmıştı. Fixture 100 ms yakınlığa alındı, 120/110 BPM drift fallback senaryosu korundu ve sonraki iki CI çalışması tamamen geçti.
+- Fiziksel iPhone Safari ve iki gerçek, kullanım hakkı bulunan parça ile ses kalitesi/tempo drift doğrulaması yapılmadı. Bu sonuçlar canlı cihaz veya müzikal kalite onayı değildir.
