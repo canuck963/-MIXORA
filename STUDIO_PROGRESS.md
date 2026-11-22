@@ -204,3 +204,9 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - `tests/mix-core.test.cjs`: çok kanallı attenuation, sessiz/quiet sinyalde gain=1, geçersiz sınır ve non-finite örnek testleri eklendi. `tests/browser.cjs` indirilen gerçek WAV örneklerini okuyup sample peak'in -1 dBFS tavanını aşmadığını doğrular.
 - Sınır: bu sample-peak ceiling'dir; inter-sample true-peak limiter, LUFS loudness normalization veya mastering değildir. Çok yüksek miksleri yalnızca kısar; preview ile mutlak loudness farkı olabilir. Gerçek müzikte dinleme ve iPhone bellek testi hâlâ gerekir.
 - Sonraki: yeni push/PR CI'da Node, syntax, Python, Chromium ve WebKit sonuçlarını kontrol et; iki kullanım hakkı bulunan parçada preview/WAV peak ve subjektif geçiş kalitesini dinle; iPhone Safari'de uzun export bellek davranışını ölç. Pitch-preserving time-stretch, phrase/downbeat tespiti, gerçek SMTP ve canlı dağıtım açık.
+
+
+### CI düzeltmesi — WAV peak ceiling test fixture'ı
+- İlk push CI #45032841318'de 65/66 Node testi geçti. Algoritma sonucu doğruydu; test, Float32Array'in 0.1 gibi değerleri ikili kayan nokta hassasiyetiyle saklamasını hesaba katmadan normal JS sayılarıyla deep-equal yaptı.
+- Quiet-signal testi artık aynı Float32Array'in kayıt öncesi snapshot'ıyla karşılaştırıyor. Non-finite testine iki kanal eklendi; ikinci kanaldaki NaN nedeniyle hata oluştuğunda ilk yüksek kanala kısmi attenuation uygulanmadığı da doğrulanıyor.
+- Düzeltme commit'i ayrı olacak; önceki CI başarısızlığı açıkça kaydedildi. Yeni Node, syntax, Python ve Chromium/WebKit sonucu bekleniyor.

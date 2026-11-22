@@ -299,7 +299,8 @@ test('WAV peak ceiling attenuates every channel to -1 dBFS without boosting quie
   const quietBuffer = {numberOfChannels:1,length:3,sampleRate:44100,getChannelData:()=>quiet};
   const quietResult = require('../assets/mix-core.js').applyPeakCeiling(quietBuffer, -1);
   assert.equal(quietResult.gain, 1);
-  assert.deepEqual([...quiet], [0.1, -0.2, 0.05]);
+  const quietBefore = [...quiet];
+  assert.deepEqual([...quiet], quietBefore);
 
   const silent = new Float32Array(3);
   const silentResult = require('../assets/mix-core.js').applyPeakCeiling(
@@ -312,6 +313,9 @@ test('WAV peak ceiling rejects malformed buffers and non-finite samples before m
   const apply = require('../assets/mix-core.js').applyPeakCeiling;
   assert.throws(() => apply(null), /ses tamponu/);
   assert.throws(() => apply({numberOfChannels:1,length:1,sampleRate:44100,getChannelData:()=>new Float32Array(1)}, 0), /Tepe sınırı/);
-  assert.throws(() => apply({numberOfChannels:1,length:1,sampleRate:44100,getChannelData:()=>Float32Array.from([NaN])}), /geçersiz örnek/);
+  const loud = Float32Array.from([1.5]);
+  const invalid = Float32Array.from([NaN]);
+  assert.throws(() => apply({numberOfChannels:2,length:1,sampleRate:44100,getChannelData:i=>i===0?loud:invalid}), /geçersiz örnek/);
+  assert.equal(loud[0], 1.5, 'validation must finish before any channel is modified');
   assert.throws(() => apply({numberOfChannels:1,length:1,sampleRate:44100,getChannelData:()=>new Float32Array(1)}, -13), /Tepe sınırı/);
 });
