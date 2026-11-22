@@ -60,12 +60,14 @@ function wav(hz){const n=44100*2,b=Buffer.alloc(44+n*2);b.write('RIFF');b.writeU
  }
  await page.locator('#password').fill('browser-safe-password');await page.locator('#register').click();await page.waitForSelector('#profile:not(.hidden)');
  await page.locator('#title').fill('Tarayıcı remix testi');await page.locator('#audioFile').setInputFiles({name:'mix.wav',mimeType:'audio/wav',buffer:out});await page.locator('#rights').check();await page.locator('#publishBtn').click();await page.waitForSelector('.post audio');
- const likeButton=page.locator('.post button').filter({hasText:'♡'}).first();
- const likeResponse=page.waitForResponse(r=>r.url().includes('/likes')&&['POST','DELETE'].includes(r.request().method()));
- await likeButton.click();const likeResult=await likeResponse;
- assert.equal(likeResult.status(),200,name+' like request failed: '+await likeResult.text());
-  // Check the clicked card rather than a global hard-coded like total.
-  await page.waitForFunction(button => button.textContent.trim().startsWith('♥'), await likeButton.elementHandle(), {timeout:10000});
+  const postId=new URL(page.url()).searchParams.get('post');assert.ok(postId,name+' published post URL is missing its id');
+  const postCard=page.locator('#post-'+postId);await postCard.waitFor();
+  const likeButton=postCard.locator('.actions button').first();
+  assert.ok((await likeButton.textContent()).trim().startsWith('♡'),name+' new post should start unliked');
+  const likeResponse=page.waitForResponse(r=>r.url().includes('/likes')&&['POST','DELETE'].includes(r.request().method()));
+  await likeButton.click();const likeResult=await likeResponse;
+  assert.equal(likeResult.status(),200,name+' like request failed: '+await likeResult.text());
+  await page.waitForFunction(button=>button.textContent.trim().startsWith('♥'),await likeButton.elementHandle(),{timeout:10000});
  await page.locator('summary').click();await page.locator('.post input').fill('Harika');await page.locator('.post button').filter({hasText:'Yorum ekle'}).click();await page.waitForSelector('.comment');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:'/tmp/mixora-community-'+name+'.png',fullPage:true});
  await page.goto('http://localhost:8000/index.html');await page.locator('#goStudio').click();await page.locator('#fileA').setInputFiles({name:'a.wav',mimeType:'audio/wav',buffer:wav(220)});await page.locator('#playBoth').click();await page.waitForTimeout(100);await page.locator('#pauseBoth').click();
