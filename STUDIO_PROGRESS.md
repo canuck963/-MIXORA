@@ -159,3 +159,8 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - `tests/mix-core.test.cjs` senaryosu aynı tempolu iki sentetik kaynağın A ve B girişlerini ayrı ayrı hizaladığını, 120/110 BPM örneğinde tahmini kayma sınırı aşıldığı için varsayılan planı koruduğunu doğrular.
 - GitHub Actions yeni commit üzerinde Node, syntax, Python ve Chromium/WebKit akışlarını çalıştıracak. Fiziksel iPhone Safari ve izinli gerçek müzikle dinleme testi hâlâ gereklidir.
 - Sonraki işler: gerçek şarkılarda beat-grid/phase doğruluğunu ölç; pitch-preserving time-stretch'i ayrı bir ses motoru olarak tasarla ve CPU/bellek sınırlarını test et; üç önerinin WAV çıktısını aynı kaynaklarla karşılaştır. Issue #2 ve PR #1 ayrı açık kalır; ana dal ve diğer PR dalları değiştirilmez.
+
+
+### 22 Kasım — çift kaynak hizalama test eşiği düzeltmesi
+- İlk CI (#45030418255 / #45030423470) 63/64 Node testi geçti. Yeni sinematik testte A vuruşu planlanan girişten 160 ms uzaktı; algoritmanın çeyrek-vuruş toleransı 120 BPM'de 125 ms olduğundan güvenli fallback doğru çalıştı. Hata algoritmada değil, testin hizalanabilir örnek varsayımındaydı.
+- Sentetik A vuruşu 100 ms farkla hizalanabilir konuma alındı; 120/110 BPM drift reddi ayrı senaryo olarak korunuyor. Yeni CI çalışması bu test düzeltmesini doğrulayacak.

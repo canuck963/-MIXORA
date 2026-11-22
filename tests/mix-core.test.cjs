@@ -77,7 +77,7 @@ test('cinematic overlay aligns both source beat starts only when projected drift
   const studio = fs.readFileSync('assets/studio.js', 'utf8');
   const select = studio.slice(studio.indexOf('function selectedSuggestion'), studio.indexOf('for(let i=0;i<3;i++)'));
   const values = {startA: 2, endA: 12, startB: 1.02, endB: 11.02};
-  const aBuffer = {...clickTrack(48000, Array.from({length: 20}, (_, i) => 2.16 + i / 2)), duration: 12};
+  const aBuffer = {...clickTrack(48000, Array.from({length: 20}, (_, i) => 2.10 + i / 2)), duration: 12};
   const makeScope = bTimes => {
     const bBuffer = {...clickTrack(48000, bTimes), duration: 12};
     const scope = vm.createContext({tracks: {A: {buffer: aBuffer}, B: {buffer: bBuffer}},
@@ -88,7 +88,7 @@ test('cinematic overlay aligns both source beat starts only when projected drift
 
   const aligned = makeScope(Array.from({length: 20}, (_, i) => 1.07 + i / 2));
   const result = aligned.selectedSuggestion(2);
-  assert.ok(Math.abs(result.clips[1].delay - 4.16) < 0.011);
+  assert.ok(Math.abs(result.clips[1].delay - 4.10) < 0.011);
   assert.ok(Math.abs(result.clips[1].start - 1.07) < 0.011);
   assert.match(result.description, /A\/B giriş vuruşları eşleştirildi/);
   assert.deepEqual(result.clips, aligned.selectedSuggestion(2).clips);
