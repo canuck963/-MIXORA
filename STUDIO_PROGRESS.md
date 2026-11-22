@@ -210,3 +210,11 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - İlk push CI #45032841318'de 65/66 Node testi geçti. Algoritma sonucu doğruydu; test, Float32Array'in 0.1 gibi değerleri ikili kayan nokta hassasiyetiyle saklamasını hesaba katmadan normal JS sayılarıyla deep-equal yaptı.
 - Quiet-signal testi artık aynı Float32Array'in kayıt öncesi snapshot'ıyla karşılaştırıyor. Non-finite testine iki kanal eklendi; ikinci kanaldaki NaN nedeniyle hata oluştuğunda ilk yüksek kanala kısmi attenuation uygulanmadığı da doğrulanıyor.
 - Düzeltme commit'i ayrı olacak; önceki CI başarısızlığı açıkça kaydedildi. Yeni Node, syntax, Python ve Chromium/WebKit sonucu bekleniyor.
+
+
+### Nihai CI doğrulaması — WAV peak ceiling, 22 Kasım 2026
+- [Push workflow #45032927608](https://github.com/canuck963/-MIXORA/actions/runs/45032927608) **başarılı**.
+- Node **66/66**, JavaScript/HTML syntax başarılı, Python **12/12**, Playwright Chromium ve WebKit akışları başarılı.
+- Browser testi indirilen 16-bit WAV dosyasını okuyup sample peak'in -1 dBFS tavanı içinde kaldığını, sesin sessiz olmadığını; üç öneri önizlemesi, proje kaydı/geri yükleme ve topluluk akışını doğruladı.
+- İlk CI'daki tek hata Float32Array test fixture hassasiyetiydi; 237a199 düzeltmesi sonrasında push workflow tamamen geçti. PR workflow #45032931884 aynı commit için son kontrolde hâlâ çalışıyordu.
+- Bu CI fiziksel iPhone Safari, true-peak, gerçek parça dinleme veya mastering kalitesi onayı değildir.
