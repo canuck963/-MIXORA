@@ -72,25 +72,37 @@ test('both studio pages bind the A and B controls to their selection and decoded
   }
 });
 
-test('cinematic preview and apply use the same nearby observed beat or the original delay', () => {
+test('cinematic overlay aligns both source beat starts only when projected drift stays bounded', () => {
   const fs = require('node:fs'), vm = require('node:vm');
   const studio = fs.readFileSync('assets/studio.js', 'utf8');
   const select = studio.slice(studio.indexOf('function selectedSuggestion'), studio.indexOf('for(let i=0;i<3;i++)'));
-  const range = {startA: 2, endA: 12, startB: 1, endB: 9};
-  for (const regular of [true, false]) {
-    const times = regular ? Array.from({length: 20}, (_, i) => 2.16 + i / 2) : [];
-    const buffer = {...clickTrack(48000, times), duration: 12};
-    const context = vm.createContext({tracks: {A: {buffer}, B: {buffer}}, $: id => ({value: range[id]}),
-      MixCore: {suggestions}, ...require('../assets/tempo.js')});
-    vm.runInContext(select, context);
-    const result = context.selectedSuggestion(2);
-    assert.ok(Math.abs(result.clips[1].delay - (regular ? 4.16 : 4)) < 0.011);
-    assert.match(result.description, regular ? /hizalandı/ : /varsayılan/);
-    assert.deepEqual(result.clips, context.selectedSuggestion(2).clips);
-    assert.equal(result.clips[0].start, 2);
-    assert.equal(result.clips[1].start, 1);
-    assert.deepEqual(context.selectedSuggestion(0).clips, suggestions(12, 12, {A:{start:2,end:12}, B:{start:1,end:9}})[0].clips);
-  }
+  const values = {startA: 2, endA: 12, startB: 1.02, endB: 11.02};
+  const aBuffer = {...clickTrack(48000, Array.from({length: 20}, (_, i) => 2.16 + i / 2)), duration: 12};
+  const makeScope = bTimes => {
+    const bBuffer = {...clickTrack(48000, bTimes), duration: 12};
+    const scope = vm.createContext({tracks: {A: {buffer: aBuffer}, B: {buffer: bBuffer}},
+      $: id => ({value: values[id]}), MixCore: {suggestions}, ...require('../assets/tempo.js')});
+    vm.runInContext(select, scope);
+    return scope;
+  };
+
+  const aligned = makeScope(Array.from({length: 20}, (_, i) => 1.07 + i / 2));
+  const result = aligned.selectedSuggestion(2);
+  assert.ok(Math.abs(result.clips[1].delay - 4.16) < 0.011);
+  assert.ok(Math.abs(result.clips[1].start - 1.07) < 0.011);
+  assert.match(result.description, /A\/B giriş vuruşları eşleştirildi/);
+  assert.deepEqual(result.clips, aligned.selectedSuggestion(2).clips);
+  assert.equal(result.clips[0].start, 2);
+  assert.equal(result.clips[1].end, 11.02);
+
+  const mismatched = makeScope(Array.from({length: 18}, (_, i) => 1.07 + i * 60 / 110));
+  const fallback = mismatched.selectedSuggestion(2);
+  assert.equal(fallback.clips[1].delay, 4);
+  assert.equal(fallback.clips[1].start, 1.02);
+  assert.match(fallback.description, /varsayılan giriş korundu/);
+
+  assert.deepEqual(aligned.selectedSuggestion(0).clips,
+    suggestions(12, 12, {A:{start:2,end:12}, B:{start:1.02,end:11.02}})[0].clips);
 });
 
 test('energetic trims only a silent lead-in inside B and keeps the original selection', () => {

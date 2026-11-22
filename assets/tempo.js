@@ -214,6 +214,51 @@ function alignOverlayEntry(buffer, start, end, delay) {
   }
   return nearest === null ? null : nearest - start;
 }
+
+// Align an overlay's two source onsets to their own observed beat grids.
+// The pair is accepted only when both grids are confident and their projected
+// drift stays bounded for the actual overlap; this is phase alignment, not
+// time-stretch or a claim that either beat is a musical downbeat.
+function alignOverlayPair(aBuffer, aStart, aEnd, bBuffer, bStart, bEnd, delay, maxDriftSeconds = 0.10) {
+  if (![aStart, aEnd, bStart, bEnd, delay, maxDriftSeconds].every(Number.isFinite) ||
+      aStart < 0 || bStart < 0 || aEnd - aStart < 4 || bEnd - bStart < 4 ||
+      delay < 0 || delay >= aEnd - aStart || maxDriftSeconds < 0.02 || maxDriftSeconds > 0.5) return null;
+
+  const a = analyzeTempo(aBuffer, aStart, aEnd);
+  const b = analyzeTempo(bBuffer, bStart, bEnd);
+  if (!a || !b || a.ambiguous || b.ambiguous) return null;
+
+  function nearestBeat(analysis, target) {
+    const tolerance = Math.min(0.25, Math.max(0.06, 15 / analysis.bpm));
+    let nearest = null;
+    for (const time of analysis.beats) {
+      const distance = Math.abs(time - target);
+      if (distance <= tolerance && (!nearest || distance < nearest.distance)) {
+        nearest = {time, distance};
+      }
+    }
+    return nearest;
+  }
+
+  const aBeat = nearestBeat(a, aStart + delay);
+  const bBeat = nearestBeat(b, bStart);
+  if (!aBeat || !bBeat || bEnd - bBeat.time < 0.15) return null;
+
+  const overlap = Math.min(aEnd - aBeat.time, bEnd - bBeat.time);
+  if (overlap < 0.5) return null;
+  const averagePeriod = (a.period + b.period) / 2;
+  const driftSeconds = Math.abs(a.period - b.period) * overlap / averagePeriod;
+  if (!Number.isFinite(driftSeconds) || driftSeconds > maxDriftSeconds) return null;
+
+  return {
+    start: bBeat.time,
+    delay: aBeat.time - aStart,
+    aBpm: a.bpm,
+    bBpm: b.bpm,
+    driftSeconds,
+    confidence: Math.min(a.confidence, b.confidence)
+  };
+}
 // Skip only a quiet lead-in followed by sustained audio in the first four seconds.
 function energeticEntry(buffer, start, end) {
   const rate = buffer.sampleRate;
@@ -268,7 +313,7 @@ function emotionalFade(buffer, start, end, maxOverlap) {
   }
   return null;
 }
-if (typeof module === 'object') module.exports = {analyzeTempo, estimateTempo, tempoMatch, snapRangeToBeats, alignOverlayEntry, energeticEntry, emotionalFade, bindBeatSnapControls};
+if (typeof module === 'object') module.exports = {analyzeTempo, estimateTempo, tempoMatch, snapRangeToBeats, alignOverlayEntry, alignOverlayPair, energeticEntry, emotionalFade, bindBeatSnapControls};
 
 function bindBeatSnapControls(selectRange) {
   for (const id of ['A', 'B']) {

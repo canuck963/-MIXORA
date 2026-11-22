@@ -26,12 +26,17 @@ function selectedSuggestion(i){
   }
   const entry = suggestion.clips.find(clip => clip.overlay);
   if (entry) {
-    const delay = alignOverlayEntry(tracks.A.buffer, ranges.A.start, ranges.A.end, entry.delay);
-    if (delay === null) {
-      suggestion.description += ' Düzenli vuruş bulunamadı, varsayılan giriş kullanıldı.';
+    const alignment = alignOverlayPair(
+      tracks.A.buffer, ranges.A.start, ranges.A.end,
+      tracks.B.buffer, ranges.B.start, ranges.B.end, entry.delay
+    );
+    if (!alignment) {
+      suggestion.description += ' A/B kesitlerinde güvenilir ve düşük kaymalı vuruş eşleşmesi bulunamadı; varsayılan giriş korundu.';
     } else {
-      entry.delay = delay;
-      suggestion.description += ' B girişi A’daki yakın bir vuruşa hizalandı.';
+      entry.start = alignment.start;
+      entry.delay = alignment.delay;
+      suggestion.description += ' A/B giriş vuruşları eşleştirildi (' + alignment.aBpm + '/' +
+        alignment.bBpm + ' BPM; öngörülen kayma ' + Math.round(alignment.driftSeconds * 1000) + ' ms).';
     }
   }
   return suggestion;

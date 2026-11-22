@@ -150,3 +150,12 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Node: **64/64**, HTML/JavaScript syntax: başarılı, Python: **12/12**, Playwright Chromium + WebKit kurulum ve browser akışı: başarılı.
 - Bu doğrulama GitHub Actions üzerinde yapıldı. Depoda `package.json` veya ayrı frontend build script'i bulunmuyor; CI'nın gerçek kontrol zinciri Node testleri, syntax, Python sunucu testleri ve Playwright tarayıcı senaryolarıdır.
 - Fiziksel iPhone Safari, iki gerçek lisanslı/izinli müzik dosyasıyla dinleme testi, perde korumalı time-stretch ve üç WAV kalite karşılaştırması hâlâ yapılmadı.
+
+
+## 22 Kasım 2026 — Sinematik overlay için iki kaynaklı vuruş fazı eşleştirmesi
+- Sinematik öneri artık yalnızca A parçasındaki giriş vuruşunu aramaz: A'nın planlanan overlay anı ve B'nin seçili başlangıcı kendi güvenilir beat-grid'lerine göre ayrı ayrı en yakın gözlenen vuruşa yaklaştırılır.
+- Öneri yalnızca iki analiz de belirsiz değilse, her iki giriş yakın bir vuruş içindeyse ve kalan gerçek overlap boyunca hesaplanan tempo kaynaklı faz kayması 100 ms'yi aşmıyorsa uygulanır. Aksi durumda hem B kesit başlangıcı hem overlay gecikmesi orijinal seçime döner.
+- Bu işlem yalnızca iki başlangıç fazını eşleştirir; playback rate değiştirmez, pitch-preserving time-stretch veya downbeat/phrase tespiti değildir. Uzun süreli tempo farkı olan parçalar güvenli biçimde fallback kullanır.
+- `tests/mix-core.test.cjs` senaryosu aynı tempolu iki sentetik kaynağın A ve B girişlerini ayrı ayrı hizaladığını, 120/110 BPM örneğinde tahmini kayma sınırı aşıldığı için varsayılan planı koruduğunu doğrular.
+- GitHub Actions yeni commit üzerinde Node, syntax, Python ve Chromium/WebKit akışlarını çalıştıracak. Fiziksel iPhone Safari ve izinli gerçek müzikle dinleme testi hâlâ gereklidir.
+- Sonraki işler: gerçek şarkılarda beat-grid/phase doğruluğunu ölç; pitch-preserving time-stretch'i ayrı bir ses motoru olarak tasarla ve CPU/bellek sınırlarını test et; üç önerinin WAV çıktısını aynı kaynaklarla karşılaştır. Issue #2 ve PR #1 ayrı açık kalır; ana dal ve diğer PR dalları değiştirilmez.
