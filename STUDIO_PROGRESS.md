@@ -189,3 +189,10 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - WebKit'te yeni post için `waitForSelector('.post audio')` eski akış kartı nedeniyle erken tamamlanabiliyordu. Bu yüzden URL henüz `?post=<id>` olmadan test eski kartı seçiyor ve yeni post ID'sini bulamıyordu.
 - Browser testi artık yayın düğmesinden sonra uygulamanın `Remixin yayımlandı` durumunu bekliyor; ardından URL'deki yeni post ID ve o karta ait beğeni düğmesi doğrulanıyor.
 - Düzeltme commit'i: [c775745](https://github.com/canuck963/-MIXORA/commit/c775745363f1a9a04466e12d1e7c5a1df2d43174). Yeni CI sonucu bekleniyor.
+
+
+### Nihai doğrulama — 22 Kasım 2026, PR head 23ae7141
+- [Push CI #45031722363](https://github.com/canuck963/-MIXORA/actions/runs/45031722363) ve [PR CI #45031726697](https://github.com/canuck963/-MIXORA/actions/runs/45031726697) **başarılı**.
+- Node **64/64**, syntax başarılı, Python **12/12**, Playwright Chromium + WebKit kurulum ve browser akışları başarılı.
+- WebKit akış testinde önce eski kartın erken bulunması ve sabit beğeni sayısı varsayımı vardı. Test, yayın tamamlanmasını bekleyip URL'deki yeni post ID'sini ve o karta ait beğeni durumunu doğrulayacak şekilde düzeltildi.
+- Sonraki işler: fiziksel iPhone Safari; kullanım hakkı bulunan gerçek iki şarkıyla beat-grid/phase ve drift dinleme ölçümü; pitch-preserving time-stretch; üç remix WAV çıktısının kalite karşılaştırması; gerçek e-posta teslimatı/üretim dağıtımı. Bu CI sonuçları gerçek cihaz veya müzikal kalite onayı değildir.
