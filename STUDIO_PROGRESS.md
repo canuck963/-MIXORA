@@ -226,3 +226,9 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Sayfa pagehide olduğunda aktif kaynaklar durdurulur ve canlı master bus bağlantısı kesilip referansı bırakılır. Bu değişiklik, tekrarlı önizlemelerde gereksiz compressor/destination bağlantısı birikmesini önlemeyi ve iPhone Safari'de ses grafiği churn'ünü azaltmayı amaçlar; fiziksel cihaz bellek profili henüz alınmadı.
 - tests/mix-core.test.cjs yeni regresyonu doğrular: aynı preview context'te iki schedule çağrısı tek compressor/tek destination bağlantısı oluşturur; offline context ayrı compressor kullanır ve her audition kendi source'unu planlar.
 - Tam doğrulama, yeni commit için GitHub Actions Node, syntax, Python, Chromium ve WebKit adımlarıyla yapılacak. Fiziksel iPhone Safari, gerçek müzik dinleme/tempo drift, pitch-preserving time-stretch, üç WAV kalite karşılaştırması, gerçek SMTP ve üretim dağıtımı açık işler.
+
+### Nihai CI doğrulaması — 23 Kasım 2026, preview master bus
+- Push workflow [#45188829921](https://github.com/canuck963/-MIXORA/actions/runs/45188829921) ve PR workflow [#45188841228](https://github.com/canuck963/-MIXORA/actions/runs/45188841228) başarılı tamamlandı.
+- Node testleri, JavaScript/HTML syntax, Python sunucu testleri, Chromium ve WebKit browser akışı geçti. Browser senaryosu iki mobil motor üzerinde üç öneri önizlemesi, WAV export, proje geri yükleme, yerel kayıt, hesap/yayın/beğeni/yorum ve eski live deck akışlarını çalıştırdı.
+- Yeni regresyon, aynı canlı AudioContext'te iki schedule çağrısının tek compressor bus ve tek destination bağlantısı kullandığını; OfflineAudioContext'in ayrı bus oluşturduğunu doğruladı.
+- Bu CI fiziksel iPhone Safari bellek profili veya gerçek müzik kalitesi testi değildir. Gerçek cihaz ve lisanslı/izinli parça ile kulak doğrulaması hâlâ gereklidir.
