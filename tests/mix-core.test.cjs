@@ -319,3 +319,57 @@ test('WAV peak ceiling rejects malformed buffers and non-finite samples before m
   assert.equal(loud[0], 1.5, 'validation must finish before any channel is modified');
   assert.throws(() => apply({numberOfChannels:1,length:1,sampleRate:44100,getChannelData:()=>new Float32Array(1)}, -13), /Tepe sınırı/);
 });
+
+
+test('advanced Remix Studio reuses one preview compressor bus across auditions', () => {
+  const fs = require('node:fs'), vm = require('node:vm');
+  const html = fs.readFileSync('Remix.html', 'utf8');
+  const inline = html.match(/<script>\s*([\s\S]*?)<\/script>/);
+  assert.ok(inline, 'advanced editor inline script exists');
+  const source = inline[1];
+  const start = source.indexOf('function masterBus');
+  const end = source.indexOf('async function play', start);
+  assert.ok(start >= 0 && end > start, 'master bus and scheduler are present');
+  const engine = () => {
+    const state = {compressors: 0, connections: 0, sources: 0, lastMaster: null};
+    const context = {
+      destination: {},
+      createDynamicsCompressor() {
+        state.compressors++;
+        state.lastMaster = {
+          threshold: {}, knee: {}, ratio: {}, attack: {}, release: {},
+          connect() { state.connections++; },
+          disconnect() { state.disconnected = true; }
+        };
+        return state.lastMaster;
+      },
+      createBufferSource() {
+        return {connect(){}, start(){state.sources++;}};
+      },
+      createGain() {
+        return {connect(){}, gain:{setValueCurveAtTime(){}}};
+      }
+    };
+    return {context, state};
+  };
+  const preview = engine();
+  const scope = vm.createContext({
+    ctx: preview.context, previewMaster: null, sources: [],
+    tracks: {A:{buffer:{duration:4}}}, MixCore: {plan},
+    $: () => ({value:'0.5'})
+  });
+  vm.runInContext(source.slice(start, end), scope);
+  const clips = [{id:'A',start:0,end:2}];
+  scope.schedule(clips, preview.context, 0, 0.5);
+  const firstBus = scope.previewMaster;
+  scope.schedule(clips, preview.context, 0, 0.5);
+  assert.equal(preview.state.compressors, 1, 'preview must create only one compressor');
+  assert.equal(preview.state.connections, 1, 'preview master must connect once');
+  assert.equal(preview.state.sources, 2, 'each audition still schedules its own source');
+  assert.equal(scope.previewMaster, firstBus, 'repeated audition must reuse the same bus');
+
+  const offline = engine();
+  scope.schedule(clips, offline.context, 0, 0.5);
+  assert.equal(offline.state.compressors, 1, 'offline export gets its own context-local bus');
+  assert.notEqual(offline.state.lastMaster, firstBus, 'offline render must not reuse the live output bus');
+});

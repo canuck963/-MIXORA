@@ -218,3 +218,11 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Browser testi indirilen 16-bit WAV dosyasını okuyup sample peak'in -1 dBFS tavanı içinde kaldığını, sesin sessiz olmadığını; üç öneri önizlemesi, proje kaydı/geri yükleme ve topluluk akışını doğruladı.
 - İlk CI'daki tek hata Float32Array test fixture hassasiyetiydi; 237a199 düzeltmesi sonrasında push workflow tamamen geçti. PR workflow #45032931884 aynı commit için son kontrolde hâlâ çalışıyordu.
 - Bu CI fiziksel iPhone Safari, true-peak, gerçek parça dinleme veya mastering kalitesi onayı değildir.
+
+
+## 23 Kasım 2026 — Gelişmiş Remix Studio önizleme ses yolunda düğüm yeniden kullanımı
+
+- Remix.html içindeki her önizlemede yeni DynamicsCompressorNode oluşturulması yerine, canlı AudioContext için tek bir master compressor bus yeniden kullanılıyor. Her yeni önizleme kendi kaynak/gain düğümlerini oluşturmaya devam eder; OfflineAudioContext WAV render'ı kendi bağlamına ait bağımsız bus kullanır.
+- Sayfa pagehide olduğunda aktif kaynaklar durdurulur ve canlı master bus bağlantısı kesilip referansı bırakılır. Bu değişiklik, tekrarlı önizlemelerde gereksiz compressor/destination bağlantısı birikmesini önlemeyi ve iPhone Safari'de ses grafiği churn'ünü azaltmayı amaçlar; fiziksel cihaz bellek profili henüz alınmadı.
+- tests/mix-core.test.cjs yeni regresyonu doğrular: aynı preview context'te iki schedule çağrısı tek compressor/tek destination bağlantısı oluşturur; offline context ayrı compressor kullanır ve her audition kendi source'unu planlar.
+- Tam doğrulama, yeni commit için GitHub Actions Node, syntax, Python, Chromium ve WebKit adımlarıyla yapılacak. Fiziksel iPhone Safari, gerçek müzik dinleme/tempo drift, pitch-preserving time-stretch, üç WAV kalite karşılaştırması, gerçek SMTP ve üretim dağıtımı açık işler.
