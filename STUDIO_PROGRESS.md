@@ -232,3 +232,12 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Node testleri, JavaScript/HTML syntax, Python sunucu testleri, Chromium ve WebKit browser akışı geçti. Browser senaryosu iki mobil motor üzerinde üç öneri önizlemesi, WAV export, proje geri yükleme, yerel kayıt, hesap/yayın/beğeni/yorum ve eski live deck akışlarını çalıştırdı.
 - Yeni regresyon, aynı canlı AudioContext'te iki schedule çağrısının tek compressor bus ve tek destination bağlantısı kullandığını; OfflineAudioContext'in ayrı bus oluşturduğunu doğruladı.
 - Bu CI fiziksel iPhone Safari bellek profili veya gerçek müzik kalitesi testi değildir. Gerçek cihaz ve lisanslı/izinli parça ile kulak doğrulaması hâlâ gereklidir.
+
+## 24 Kasım 2026 — Bütün WAV dışa aktarma yollarında örnek tepe seviyesi güvenliği
+
+- 22 Kasım'da eklenen -1 dBFS sample-peak ceiling yalnızca gelişmiş `Remix.html` indirme düğmesinde uygulanıyordu. Kod incelemesinde iki ayrı yolun bu korumayı atladığı bulundu: `assets/studio.js` içindeki **Remixi cihaz kütüphaneme kaydet** (IndexedDB/topluluk yerel kaydı) ve eski `remix.html` manuel editörünün `toWav` dışa aktarması.
+- Yerel kütüphane kaydı artık OfflineAudioContext render'ından sonra ve WAV PCM kodlamasından önce `MixCore.applyPeakCeiling(rendered, -1)` çağırır; kullanıcıya yalnızca kısma gerektiğinde bilgi verilir.
+- Eski `remix.html` ortak `assets/mix-core.js` modülünü yükler ve indirme öncesinde `MixCore.applyPeakCeiling(result, -1)` uygular. Mevcut kesit, crossfade ve WAV kodlama davranışı korunur.
+- `tests/mix-core.test.cjs` üç WAV yolunun ortak ceiling fonksiyonunu çağırdığını regresyon testiyle sabitler. `tests/browser.cjs` Chromium/WebKit'te IndexedDB'ye kaydedilen gerçek WAV'ın örnek tepe seviyesini okur; eski editörde yüksek seviyeli sentetik iki kaynakla indirilen WAV'ın -1 dBFS sınırını doğrular. Gelişmiş editörün mevcut indirilen WAV testi korunur.
+- Bu commit'lerde CI henüz çalıştırılmadı; Node, HTML/JS syntax, Python, Chromium ve WebKit sonuçları push/PR workflow'larından sonra kaydedilecek. Fiziksel iPhone Safari ve kullanım hakkı bulunan gerçek müziklerle dinleme testi hâlâ gereklidir.
+- Sınır: bu işlem yalnızca sample-peak attenuation'dır; true-peak limiter, LUFS normalizasyonu veya mastering değildir. Gerçek cihazda uzun WAV bellek ölçümü, pitch-preserving time-stretch, üç remix WAV/önizleme kalite karşılaştırması, gerçek SMTP ve üretim dağıtımı açık kalır.
