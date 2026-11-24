@@ -321,6 +321,17 @@ test('WAV peak ceiling rejects malformed buffers and non-finite samples before m
 });
 
 
+test('all remix WAV output paths apply the shared sample peak ceiling', () => {
+  const fs = require('node:fs');
+  const advanced = fs.readFileSync('Remix.html', 'utf8');
+  const legacy = fs.readFileSync('remix.html', 'utf8');
+  const local = fs.readFileSync('assets/studio.js', 'utf8');
+  assert.match(advanced, /MixCore\\.applyPeakCeiling\\(b,\\s*-1\\)/);
+  assert.match(local, /MixCore\\.applyPeakCeiling\\(rendered,\\s*-1\\)/);
+  assert.match(legacy, /<script src="assets\\/mix-core\\.js"><\\/script>/);
+  assert.match(legacy, /MixCore\\.applyPeakCeiling\\(result,\\s*-1\\)/);
+});
+
 test('advanced Remix Studio reuses one preview compressor bus across auditions', () => {
   const fs = require('node:fs'), vm = require('node:vm');
   const html = fs.readFileSync('Remix.html', 'utf8');
