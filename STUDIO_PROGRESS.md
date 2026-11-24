@@ -239,5 +239,13 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Yerel kütüphane kaydı artık OfflineAudioContext render'ından sonra ve WAV PCM kodlamasından önce `MixCore.applyPeakCeiling(rendered, -1)` çağırır; kullanıcıya yalnızca kısma gerektiğinde bilgi verilir.
 - Eski `remix.html` ortak `assets/mix-core.js` modülünü yükler ve indirme öncesinde `MixCore.applyPeakCeiling(result, -1)` uygular. Mevcut kesit, crossfade ve WAV kodlama davranışı korunur.
 - `tests/mix-core.test.cjs` üç WAV yolunun ortak ceiling fonksiyonunu çağırdığını regresyon testiyle sabitler. `tests/browser.cjs` Chromium/WebKit'te IndexedDB'ye kaydedilen gerçek WAV'ın örnek tepe seviyesini okur; eski editörde yüksek seviyeli sentetik iki kaynakla indirilen WAV'ın -1 dBFS sınırını doğrular. Gelişmiş editörün mevcut indirilen WAV testi korunur.
-- Bu commit'lerde CI henüz çalıştırılmadı; Node, HTML/JS syntax, Python, Chromium ve WebKit sonuçları push/PR workflow'larından sonra kaydedilecek. Fiziksel iPhone Safari ve kullanım hakkı bulunan gerçek müziklerle dinleme testi hâlâ gereklidir.
+- İlk PR CI denemeleri (#45409256527 ve #45409398990) iki test altyapısı sorununu görünür kıldı: yeni kaynak-regresyonunda kaçış karakteri nedeniyle geçersiz regex ve yerel kayıt testinin artık gerçek AudioBuffer alanlarını sağlayamaması. Regex kontrolleri açık string eşitliğine çevrildi ([149ab94](https://github.com/canuck963/-MIXORA/commit/149ab94601211fcee4412648f52e9e3c49e2a21b)); kayıt testi geçerli tek kanallı render tamponu kullanacak şekilde düzeltildi ([416c8a2](https://github.com/canuck963/-MIXORA/commit/416c8a2cf7ff4d2adcb6dd03e5f2fa882e256d35)).
 - Sınır: bu işlem yalnızca sample-peak attenuation'dır; true-peak limiter, LUFS normalizasyonu veya mastering değildir. Gerçek cihazda uzun WAV bellek ölçümü, pitch-preserving time-stretch, üç remix WAV/önizleme kalite karşılaştırması, gerçek SMTP ve üretim dağıtımı açık kalır.
+
+
+### Nihai CI doğrulaması — 24 Kasım 2026, tüm WAV yolları
+
+- [PR workflow #45409469677](https://github.com/canuck963/-MIXORA/actions/runs/45409469677) **başarılı** (PR run #240).
+- Node: **68/68**; JavaScript/HTML syntax: başarılı; Python sunucu testleri: **12/12**.
+- Playwright Chromium ve WebKit mobil akışları başarılı. Yeni kontroller: IndexedDB'ye kaydedilen remix WAV'ında ceiling çağrısı ve gerçek PCM örnek tepe seviyesi; eski `remix.html` editöründe yüksek seviyeli sentetik iki kaynakla indirilen WAV'ın -1 dBFS ceiling altında kalması. Mevcut gelişmiş editör WAV export testi de geçti.
+- Bu CI, fiziksel iPhone Safari veya gerçek şarkıların öznel miks kalitesi/tempo drift testi değildir. Sample-peak ceiling true-peak/LUFS mastering sağlamaz.
