@@ -326,10 +326,10 @@ test('all remix WAV output paths apply the shared sample peak ceiling', () => {
   const advanced = fs.readFileSync('Remix.html', 'utf8');
   const legacy = fs.readFileSync('remix.html', 'utf8');
   const local = fs.readFileSync('assets/studio.js', 'utf8');
-  assert.match(advanced, /MixCore\\.applyPeakCeiling\\(b,\\s*-1\\)/);
-  assert.match(local, /MixCore\\.applyPeakCeiling\\(rendered,\\s*-1\\)/);
-  assert.match(legacy, /<script src="assets\\/mix-core\\.js"><\\/script>/);
-  assert.match(legacy, /MixCore\\.applyPeakCeiling\\(result,\\s*-1\\)/);
+  assert.ok(advanced.includes('MixCore.applyPeakCeiling(b,-1)'));
+  assert.ok(local.includes('MixCore.applyPeakCeiling(rendered,-1)'));
+  assert.ok(legacy.includes('<script src="assets/mix-core.js"></script>'));
+  assert.ok(legacy.includes('MixCore.applyPeakCeiling(result,-1)'));
 });
 
 test('advanced Remix Studio reuses one preview compressor bus across auditions', () => {
