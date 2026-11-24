@@ -107,8 +107,10 @@ $('saveLocalMix').onclick=()=>busy('saveLocalMix',async()=>{
   const length=plan(clips).length;if(length>300)throw Error('Cihaz kütüphanesi için en fazla 5 dakika seç.');
   const title=$('projectName').value||'Yeni remix';
   note('Ses hazırlanıyor…');const engine=new OfflineAudioContext(2,Math.ceil((length+.2)*44100),44100);schedule(clips,engine,0);
-  const file=new File([wav(await engine.startRendering())],'MIXORA-remix.wav',{type:'audio/wav'});
+  const rendered=await engine.startRendering();
+  const peak=MixCore.applyPeakCeiling(rendered,-1);
+  const file=new File([wav(rendered)],'MIXORA-remix.wav',{type:'audio/wav'});
   await writeDB('mixora-community-demo','posts',{id:crypto.randomUUID(),author:'Ben',title,description:'MIXORA Studio kaydı',fileBytes:await file.arrayBuffer(),fileName:file.name,fileType:file.type,created:Date.now(),likes:0,liked:false,comments:[]});
-  note('✓ Remix kaydedildi. Cihazdaki kayıtlar sayfasından dinleyip ses dosyasını paylaşabilirsin.');
+  note('✓ Remix kaydedildi. '+(peak.gain<1?'Örnek tepe seviyesi -1 dBFS sınırına indirildi. ':'Örnek tepe seviyesi -1 dBFS sınırına göre kontrol edildi. ')+'Cihazdaki kayıtlar sayfasından dinleyip ses dosyasını paylaşabilirsin.');
 });
 window.addEventListener('pagehide',()=>stop());
