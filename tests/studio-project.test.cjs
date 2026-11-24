@@ -62,7 +62,7 @@ test('duplicate save calls do not race storage writes',async()=>{
 test('local rendered remix keeps the title captured when recording started',async()=>{
  const {context:c,el}=setup(),gate=deferred();c.plan=list=>MixCore.plan(list,1);c.schedule=()=>{};
  c.OfflineAudioContext=class{startRendering(){return gate.promise;}};c.wav=()=>new Blob(['wave']);c.crypto={randomUUID:()=> 'test-mix'};
- const saving=el('saveLocalMix').onclick();el('projectName').value='Different remix';gate.resolve({});await saving;
+ const saving=el('saveLocalMix').onclick();el('projectName').value='Different remix';const samples=Float32Array.from([0.1]);gate.resolve({numberOfChannels:1,length:1,sampleRate:44100,getChannelData:()=>samples});await saving;
  assert.equal(c.written.title,'Original');assert.equal(c.written.fileName,'MIXORA-remix.wav');
 });
 
