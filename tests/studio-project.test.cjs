@@ -19,8 +19,40 @@ function setup(){
 test('save snapshots both source files, title, selections and timeline before awaiting',async()=>{
  const {context:c,el,track}=setup(),gate=deferred();c.tracks.A.file.arrayBuffer=()=>gate.promise;
  const saving=el('saveProject').onclick();c.tracks.B=track('replacement.wav');c.clips[0].end=9;el('fade').value='5';el('projectName').value='Changed';el('startA').value='3';
- gate.resolve(new ArrayBuffer(4));await saving;
+ gate.resolve(new ArrayBuffer(5));await saving;
  assert.equal(c.written.files.B.name,'B.wav');assert.equal(c.written.clips[0].end,5);assert.equal(c.written.name,'Original');assert.equal(c.written.fade,1);assert.equal(c.written.ranges.A.start,1);
+});
+test('save rejects a source larger than the restore limit before reading or writing',async()=>{
+ const {context:c,el}=setup(),file=c.tracks.A.file;Object.defineProperty(file,'size',{value:40*1024*1024+1});
+ let reads=0;file.arrayBuffer=async()=>{reads++;return new ArrayBuffer(1);};
+ await el('saveProject').onclick();
+ assert.equal(reads,0);assert.equal(c.written,undefined);
+ assert.match(el('status').textContent,/40 MB/);assert.equal(el('saveProject').disabled,false);
+});
+test('save rejects source duration and stale clip bounds that restore would reject',async()=>{
+ for(const kind of ['duration','clip']){
+  const {context:c,el}=setup();let reads=0;
+  c.tracks.A.file.arrayBuffer=async()=>{reads++;return new ArrayBuffer(5);};
+  if(kind==='duration')c.tracks.B.buffer.duration=421;
+  else c.clips[0].end=10.1;
+  await el('saveProject').onclick();
+  assert.equal(reads,0,kind);assert.equal(c.written,undefined,kind);
+  assert.match(el('status').textContent,kind==='duration'?/420 saniye/:/eski bir kesit/);
+ }
+});
+test('save rejects fade settings that the restore path does not accept',async()=>{
+ const {context:c,el}=setup();el('fade').value='6';let reads=0;
+ c.tracks.A.file.arrayBuffer=async()=>{reads++;return new ArrayBuffer(5);};
+ await el('saveProject').onclick();
+ assert.equal(reads,0);assert.equal(c.written,undefined);
+ assert.match(el('status').textContent,/en fazla 5 saniye/);
+});
+test('save refuses a truncated file read before committing the project',async()=>{
+ const {context:c,el}=setup();c.tracks.A.file.arrayBuffer=async()=>new ArrayBuffer(4);
+ await el('saveProject').onclick();
+ assert.equal(c.written,undefined);
+ assert.match(el('status').textContent,/eksik okundu/);
+ assert.equal(el('saveProject').disabled,false);
 });
 test('restore preserves edits made while reading storage and releases button',async()=>{
  const {context:c,el}=setup(),gate=deferred();c.gate=gate.promise;vm.runInContext('latestProject=()=>gate',c);

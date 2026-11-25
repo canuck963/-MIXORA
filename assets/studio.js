@@ -59,16 +59,41 @@ function editorState(){
   return JSON.stringify({clips,fade:$('fade').value,name:$('projectName').value,
     ranges:['A','B'].map(id=>[$('start'+id).value,$('end'+id).value])});
 }
+const PROJECT_SOURCE_LIMIT=40*1024*1024;
+const PROJECT_DURATION_LIMIT=420;
+function validateProjectForSave(project,sources,sourceTracks){
+  if(!Number.isFinite(project.fade)||project.fade<0||project.fade>5)
+    throw Error('Proje geçiş süresi geri açma sınırını aşıyor (en fazla 5 saniye).');
+  for(const id of ['A','B']){
+    const file=sources[id],duration=sourceTracks[id]?.buffer?.duration,range=project.ranges[id];
+    if(!(file instanceof Blob)||!Number.isSafeInteger(file.size)||file.size<=0||file.size>PROJECT_SOURCE_LIMIT)
+      throw Error(id+' ses dosyası boş veya proje kaydı için 40 MB sınırını aşıyor.');
+    if(!Number.isFinite(duration)||duration<.15||duration>PROJECT_DURATION_LIMIT)
+      throw Error(id+' ses dosyası proje geri açma sınırlarına uymuyor (0,15–420 saniye).');
+    if(!range||!Number.isFinite(range.start)||!Number.isFinite(range.end)||range.start<0||
+      range.end>duration||range.end-range.start<.15)
+      throw Error(id+' seçili ses aralığı geçersiz.');
+    if(project.clips.some(clip=>clip.id===id&&clip.end>duration+.001))
+      throw Error(id+' çizelgesinde mevcut ses dosyasını aşan eski bir kesit var. Kesiti yeniden seç.');
+  }
+}
 $('saveProject').onclick=()=>busy('saveProject',async()=>{
   if(!tracks.A||!tracks.B||!clips.length)throw Error('İki parçayı yükle ve çizelge oluştur.');
-  // Capture every mutable field before the first asynchronous file read.
-  const sources={A:tracks.A.file,B:tracks.B.file};
+  // Capture every mutable field and source object before the first asynchronous read.
+  const sourceTracks={A:tracks.A,B:tracks.B};
+  const sources={A:sourceTracks.A.file,B:sourceTracks.B.file};
   const project={id:'latest',name:$('projectName').value,files:{},clips:structuredClone(clips),
     fade:Number($('fade').value),ranges:{}};
   for(const id of ['A','B'])project.ranges[id]={start:Number($('start'+id).value),end:Number($('end'+id).value)};
   MixCore.plan(project.clips,project.fade);
-  MixCore.suggestions(tracks.A.buffer.duration,tracks.B.buffer.duration,project.ranges);
-  for(const id of ['A','B']){const file=sources[id];project.files[id]={name:file.name,type:file.type,bytes:await file.arrayBuffer()};}
+  validateProjectForSave(project,sources,sourceTracks);
+  MixCore.suggestions(sourceTracks.A.buffer.duration,sourceTracks.B.buffer.duration,project.ranges);
+  for(const id of ['A','B']){
+    const file=sources[id],bytes=await file.arrayBuffer();
+    if(!bytes||!Number.isSafeInteger(bytes.byteLength)||bytes.byteLength!==file.size)
+      throw Error(id+' ses dosyası eksik okundu; proje kaydedilmedi.');
+    project.files[id]={name:file.name,type:file.type,bytes};
+  }
   await writeDB('mixora-studio','projects',project);note('✓ Kaydet düğmesine bastığın andaki proje ve kaynak sesler bu cihazda saklandı.');
 });
 $('restoreProject').onclick=()=>busy('restoreProject',async()=>{
@@ -86,14 +111,14 @@ $('restoreProject').onclick=()=>busy('restoreProject',async()=>{
   for(const id of ['A','B']){
     const saved=project.files?.[id];
     const file=saved?.bytes instanceof ArrayBuffer?new File([saved.bytes],saved.name,{type:saved.type}):saved;
-    if(!(file instanceof Blob)||!file.size||file.size>40*1024*1024)throw Error('Saklanan ses dosyası geçersiz veya 40 MB sınırını aşıyor.');
+    if(!(file instanceof Blob)||!file.size||file.size>PROJECT_SOURCE_LIMIT)throw Error('Saklanan ses dosyası geçersiz veya 40 MB sınırını aşıyor.');
     files[id]=file;
   }
   // Decode and validate both sources before changing any part of the working project.
   const next={},ranges={};
   for(const id of ['A','B']){
     const file=files[id],buffer=await ctx.decodeAudioData(await file.arrayBuffer());unchanged();
-    if(!Number.isFinite(buffer.duration)||buffer.duration<.15||buffer.duration>420)throw Error('Saklanan ses en fazla 7 dakika olmalı.');
+    if(!Number.isFinite(buffer.duration)||buffer.duration<.15||buffer.duration>PROJECT_DURATION_LIMIT)throw Error('Saklanan ses en fazla 7 dakika olmalı.');
     next[id]={file,buffer};
     ranges[id]=project.ranges?.[id]||{start:0,end:buffer.duration};
   }
