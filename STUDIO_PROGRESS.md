@@ -249,3 +249,16 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Node: **68/68**; JavaScript/HTML syntax: başarılı; Python sunucu testleri: **12/12**.
 - Playwright Chromium ve WebKit mobil akışları başarılı. Yeni kontroller: IndexedDB'ye kaydedilen remix WAV'ında ceiling çağrısı ve gerçek PCM örnek tepe seviyesi; eski `remix.html` editöründe yüksek seviyeli sentetik iki kaynakla indirilen WAV'ın -1 dBFS ceiling altında kalması. Mevcut gelişmiş editör WAV export testi de geçti.
 - Bu CI, fiziksel iPhone Safari veya gerçek şarkıların öznel miks kalitesi/tempo drift testi değildir. Sample-peak ceiling true-peak/LUFS mastering sağlamaz.
+
+
+## 25 Kasım 2026 — Proje kaydetme/geri açma tutarlılığı
+
+- Kod incelemesinde kaydetme yolunun geri yükleme yolundan daha gevşek olduğu doğrulandı: kaydetme 40 MB üzeri veya 420 saniyeyi aşan kaynakları kabul edebiliyor, ancak geri yükleme bunları reddediyordu. Eski bir çizelge kesiti yeni yüklenen kaynağın süresini aşsa veya fade 5 saniyeyi geçse de geri açılamayan proje kaydedilebiliyordu.
+- `assets/studio.js` kaydetmeden önce iki kaynak için geri yüklemeyle aynı 40 MB ve 0,15–420 saniye sınırlarını, seçili aralıkları, mevcut kaynağı aşan klipleri ve 0–5 saniye fade aralığını doğrular.
+- Her dosyanın `arrayBuffer()` sonucu beklenen `file.size` ile eşleşmeden IndexedDB yazımı yapılmaz; eksik okuma mevcut kaydı değiştirmez.
+- `tests/studio-project.test.cjs` dört yeni regresyon senaryosu ekler: 40 MB sınırı, 420 saniye/eskimiş klip, fade sınırı ve kesik dosya okuması. Snapshot testi de gerçek dosya boyutuyla hizalandı.
+- Kod/test commit'i: [a0baab2](https://github.com/canuck963/-MIXORA/commit/a0baab296e17705aba03a50ac75958cc8ee83c60).
+- [GitHub Actions #45628627937](https://github.com/canuck963/-MIXORA/actions/runs/45628627937) **başarılı**: Node **72/72**, JavaScript/HTML syntax, Python **12/12**, Playwright Chromium ve WebKit. Browser akışında proje kaydetme/geri yükleme, üç remix önizlemesi, WAV export, yerel kayıt ve topluluk hesap/yayın/beğeni/yorum senaryoları geçti.
+- Yerel container'dan GitHub klonu DNS çözümleme hatası nedeniyle açılamadı; tam test paketi GitHub Actions tarafından doğrudan aynı commit üzerinde çalıştırıldı. Depoda ayrı bir frontend bundle/build script'i yok; CI'nin syntax ve tarayıcı entegrasyon adımları kullanıldı.
+- Bu CI fiziksel iPhone Safari, gerçek müziklerle subjektif miks kalitesi/tempo drift veya cihaz depolama kotası testi değildir. Pitch-preserving time-stretch, üç gerçek WAV çıktısının kalite karşılaştırması, gerçek SMTP ve üretim dağıtımı açık kalır.
+- PR #8 güncellendi; PR #1 taslak olarak ayrı, Issue #2 açık bırakıldı. `main` değiştirilmedi ve canlı dağıtım yapılmadı.
