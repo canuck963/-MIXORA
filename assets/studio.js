@@ -18,10 +18,16 @@ function selectedSuggestion(i){
   }
   if (i === 1) {
     const clip = suggestion.clips[1];
-    const start = energeticEntry(tracks.B.buffer, clip.start, clip.end);
+    const quietStart = energeticEntry(tracks.B.buffer, clip.start, clip.end);
+    const drop = energeticDropEntry(tracks.B.buffer, quietStart, clip.end);
+    const start = drop?.start ?? quietStart;
     if (start > clip.start) {
       clip.start = start;
-      suggestion.description = 'B bölümünün başındaki sessizlik kısaltıldı. Kısa geçişle girer.';
+      suggestion.description = drop
+        ? 'B bölümündeki sürdürülen enerji yükselişi, güvenilir ' + drop.bpm +
+          ' BPM vuruşuna hizalanarak giriş noktası seçildi (' +
+          Math.round(drop.confidence * 100) + '% güven). Kısa geçişle girer.'
+        : 'B bölümünün başındaki sessizlik kısaltıldı. Kısa geçişle girer.';
     }
   }
   const entry = suggestion.clips.find(clip => clip.overlay);

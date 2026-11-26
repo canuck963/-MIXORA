@@ -1,6 +1,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {analyzeTempo,estimateTempo,tempoMatch,snapRangeToBeats}=require('../assets/tempo.js');
+const {analyzeTempo,estimateTempo,tempoMatch,snapRangeToBeats,energeticDropEntry}=require('../assets/tempo.js');
+const {suggestions}=require('../assets/mix-core.js');
 
 function pulseBuffer(rate,bpm,seconds=12,offbeatStrength=0){
   const length=rate*seconds, left=new Float32Array(length), right=new Float32Array(length);
@@ -14,6 +15,56 @@ function pulseBuffer(rate,bpm,seconds=12,offbeatStrength=0){
   }
   return {sampleRate:rate,length,numberOfChannels:2,getChannelData:i=>i?right:left};
 }
+
+function energyLiftBuffer(rate=48000,seconds=12,ambiguous=false){
+  const length=rate*seconds,right=new Float32Array(length);
+  const pulse=(time,strength)=>{
+    const from=Math.round(time*rate),to=Math.min(length,from+Math.round(.04*rate));
+    right.fill(strength,from,to);
+  };
+  for(let time=1;time<seconds-.2;time+=.5){
+    const strength=time<4?.1:.7;
+    pulse(time,strength);
+    if(ambiguous)pulse(time+.25,strength);
+  }
+  return {sampleRate:rate,length,numberOfChannels:1,getChannelData:()=>right,duration:seconds};
+}
+
+test('energetic drop chooses a sustained lift only on a confident beat grid',()=>{
+  const buffer=energyLiftBuffer();
+  const result=energeticDropEntry(buffer,0,12);
+  assert.ok(result);
+  assert.equal(result.bpm,120);
+  assert.ok(Math.abs(result.start-4)<.03);
+  assert.ok(result.confidence>=.7);
+  assert.ok(result.energyRatio>=1.5);
+  assert.equal(energeticDropEntry(pulseBuffer(48000,120),0,12),null,
+    'uniform energy must keep the original entry');
+  assert.equal(energeticDropEntry(energyLiftBuffer(48000,12,true),0,12),null,
+    'ambiguous beat/offbeat grids must not move the entry');
+});
+
+test('Energetic suggestion uses the sustained beat-aligned lift while other plans stay independent',()=>{
+  const fs=require('node:fs'),vm=require('node:vm');
+  const source=fs.readFileSync('assets/studio.js','utf8');
+  const select=source.slice(source.indexOf('function selectedSuggestion'),source.indexOf('for(let i=0;i<3;i++)'));
+  const buffer=energyLiftBuffer();
+  const values={startA:0,endA:12,startB:0,endB:12};
+  const scope=vm.createContext({
+    tracks:{A:{buffer},B:{buffer}},
+    $:id=>({value:values[id]}),
+    MixCore:{suggestions},
+    ...require('../assets/tempo.js')
+  });
+  vm.runInContext(select,scope);
+  const energetic=scope.selectedSuggestion(1);
+  assert.ok(Math.abs(energetic.clips[1].start-4)<.03);
+  assert.equal(energetic.clips[1].end,12);
+  assert.match(energetic.description,/enerji yükselişi/);
+  assert.match(energetic.description,/120 BPM/);
+  assert.equal(scope.selectedSuggestion(0).clips[1].start,0);
+  assert.equal(scope.selectedSuggestion(2).clips[1].start,0);
+});
 
 test('tempo analysis exposes a bounded confidence and regular beat positions',()=>{
   for(const rate of [44100,48000])for(const bpm of [72,100,128,160]){

@@ -262,3 +262,12 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - Yerel container'dan GitHub klonu DNS çözümleme hatası nedeniyle açılamadı; tam test paketi GitHub Actions tarafından doğrudan aynı commit üzerinde çalıştırıldı. Depoda ayrı bir frontend bundle/build script'i yok; CI'nin syntax ve tarayıcı entegrasyon adımları kullanıldı.
 - Bu CI fiziksel iPhone Safari, gerçek müziklerle subjektif miks kalitesi/tempo drift veya cihaz depolama kotası testi değildir. Pitch-preserving time-stretch, üç gerçek WAV çıktısının kalite karşılaştırması, gerçek SMTP ve üretim dağıtımı açık kalır.
 - PR #8 güncellendi; PR #1 taslak olarak ayrı, Issue #2 açık bırakıldı. `main` değiştirilmedi ve canlı dağıtım yapılmadı.
+
+## 26 Kasım 2026 — Enerjik remix için sürdürülen enerji yükselişi ve güvenilir vuruş girişi
+
+- assets/tempo.js içine energeticDropEntry eklendi. B kesitinin ilk 12 saniyesinde 750 ms pencerelerle RMS enerji karşılaştırması yapar; ilk 1,5 saniyelik temel seviyeye göre en az %50 ve mutlak 0,012 RMS artış arar. Tek transient yerine sürdürülen pencere kullanılır.
+- Aday giriş, yalnızca analyzeTempo güvenilir ve belirsiz olmayan bir grid döndürürse en yakın gözlenen vuruşa (en fazla 250 ms) taşınır. BPM/half-double belirsizliği, yeterli enerji kontrastı veya yakın vuruş yoksa orijinal Enerjik giriş korunur. Bu heuristik phrase/downbeat tespiti, time-stretch veya ML değildir.
+- assets/studio.js Enerjik öneride önce mevcut sessiz giriş kısaltmasını korur; ardından yeni enerji yükselişi seçicisini çağırır. Duygusal ve Sinematik planlar ile manuel düzenleme akışı değiştirilmedi.
+- tests/tempo-match.test.cjs içine sentetik 120 BPM enerji yükselişi, sabit enerji fallback'i, belirsiz beat/offbeat fallback'i ve üç öneri UI entegrasyon testi eklendi.
+- Yeni kod commit'i için Node, syntax, Python, Chromium ve WebKit CI sonucu aşağıya eklenecek. Fiziksel iPhone Safari ve kullanım hakkı bulunan gerçek iki şarkıyla kulak/tempo drift testi hâlâ gerekli.
+- Kalan işler: pitch-preserving time-stretch; üç önerinin gerçek WAV çıktılarının aynı kaynaklarla ses kalitesi/ayrışma karşılaştırması; downbeat/phrase analizi; gerçek SMTP/üretim yapılandırması ve canlı dağıtım. PR #1 taslak, PR #6/#7 ayrı, issue #2 açık; main değiştirilmez.

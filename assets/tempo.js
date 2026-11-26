@@ -287,6 +287,73 @@ function energeticEntry(buffer, start, end) {
   }
   return start;
 }
+// Find a sustained energy lift in B, then require a confident observed beat before
+// moving the entry. This is a deterministic signal-analysis heuristic, not phrase detection.
+function energeticDropEntry(buffer, start, end) {
+  if (!buffer || !Number.isFinite(buffer.sampleRate) || buffer.sampleRate <= 0 ||
+      !Number.isInteger(buffer.length) || buffer.length <= 0 ||
+      !Number.isInteger(buffer.numberOfChannels) || buffer.numberOfChannels < 1 ||
+      !Number.isFinite(start) || !Number.isFinite(end) || start < 0 ||
+      end > buffer.length / buffer.sampleRate + 0.001 || end - start < 4) return null;
+
+  const rate = buffer.sampleRate;
+  const channels = Array.from({length: Math.min(2, buffer.numberOfChannels)},
+    (_, index) => buffer.getChannelData(index));
+  if (!channels.length) return null;
+
+  const baselineWindow = 1.5;
+  const energyWindow = 0.75;
+  const stride = 8;
+  const rms = (from, to) => {
+    const first = Math.max(0, Math.floor(from * rate));
+    const last = Math.min(buffer.length, Math.floor(to * rate));
+    let power = 0, count = 0;
+    for (const channel of channels) {
+      for (let index = first; index < last; index += stride) {
+        const sample = channel[index];
+        if (!Number.isFinite(sample)) return null;
+        power += sample * sample;
+        count++;
+      }
+    }
+    return count ? Math.sqrt(power / count) : null;
+  };
+
+  const baseline = rms(start, Math.min(end, start + baselineWindow));
+  const maxOffset = Math.min(12, end - start - energyWindow);
+  if (baseline === null || maxOffset < baselineWindow) return null;
+
+  let strongest = {level: baseline, offset: null};
+  for (let offset = baselineWindow; offset <= maxOffset + 1e-9; offset += 0.25) {
+    const level = rms(start + offset, Math.min(end, start + offset + energyWindow));
+    if (level !== null && level > strongest.level) strongest = {level, offset};
+  }
+
+  // Require a sustained and material lift; a single loud transient is not enough.
+  const threshold = Math.max(baseline * 1.5, baseline + 0.012, 0.02);
+  if (strongest.offset === null || strongest.level < threshold) return null;
+
+  const analysis = analyzeTempo(buffer, start, end);
+  if (!analysis || analysis.ambiguous) return null;
+  const target = start + strongest.offset;
+  const tolerance = Math.min(0.25, Math.max(0.06, 15 / analysis.bpm));
+  let nearest = null;
+  for (const beat of analysis.beats) {
+    const distance = Math.abs(beat - target);
+    if (distance <= tolerance && (!nearest || distance < nearest.distance)) {
+      nearest = {time: beat, distance};
+    }
+  }
+  if (!nearest || nearest.time <= start + 0.5 || end - nearest.time < 1) return null;
+
+  return {
+    start: nearest.time,
+    bpm: analysis.bpm,
+    confidence: analysis.confidence,
+    energyRatio: strongest.level / Math.max(baseline, 0.005)
+  };
+}
+
 // End the overlap at a sustained rise after an audible, quieter introduction.
 function emotionalFade(buffer, start, end, maxOverlap) {
   const rate = buffer.sampleRate;
@@ -313,7 +380,7 @@ function emotionalFade(buffer, start, end, maxOverlap) {
   }
   return null;
 }
-if (typeof module === 'object') module.exports = {analyzeTempo, estimateTempo, tempoMatch, snapRangeToBeats, alignOverlayEntry, alignOverlayPair, energeticEntry, emotionalFade, bindBeatSnapControls};
+if (typeof module === 'object') module.exports = {analyzeTempo, estimateTempo, tempoMatch, snapRangeToBeats, alignOverlayEntry, alignOverlayPair, energeticEntry, energeticDropEntry, emotionalFade, bindBeatSnapControls};
 
 function bindBeatSnapControls(selectRange) {
   for (const id of ['A', 'B']) {
