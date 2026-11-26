@@ -319,7 +319,11 @@ function energeticDropEntry(buffer, start, end) {
     return count ? Math.sqrt(power / count) : null;
   };
 
-  const baseline = rms(start, Math.min(end, start + baselineWindow));
+  // Compare equal-length windows. A longer baseline would dilute sparse but
+  // regular beats and make a uniform pulse train look like a later energy lift.
+  const baselineA = rms(start, Math.min(end, start + energyWindow));
+  const baselineB = rms(start + energyWindow, Math.min(end, start + baselineWindow));
+  const baseline = baselineA === null || baselineB === null ? null : Math.max(baselineA, baselineB);
   const maxOffset = Math.min(12, end - start - energyWindow);
   if (baseline === null || maxOffset < baselineWindow) return null;
 

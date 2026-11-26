@@ -271,3 +271,9 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - tests/tempo-match.test.cjs içine sentetik 120 BPM enerji yükselişi, sabit enerji fallback'i, belirsiz beat/offbeat fallback'i ve üç öneri UI entegrasyon testi eklendi.
 - Yeni kod commit'i için Node, syntax, Python, Chromium ve WebKit CI sonucu aşağıya eklenecek. Fiziksel iPhone Safari ve kullanım hakkı bulunan gerçek iki şarkıyla kulak/tempo drift testi hâlâ gerekli.
 - Kalan işler: pitch-preserving time-stretch; üç önerinin gerçek WAV çıktılarının aynı kaynaklarla ses kalitesi/ayrışma karşılaştırması; downbeat/phrase analizi; gerçek SMTP/üretim yapılandırması ve canlı dağıtım. PR #1 taslak, PR #6/#7 ayrı, issue #2 açık; main değiştirilmez.
+
+### 26 Kasım — Enerji yükselişi seçicisinde sabit ritim regresyonu
+
+- İlk CI run #45835694240 yeni testte uniform 120 BPM pulse train için yanlış pozitif buldu: 1,5 saniyelik baseline ile 750 ms aday penceresi farklı uzunlukta olduğundan düzenli seyrek vuruşlar yapay enerji artışı gibi görünüyordu.
+- Algoritma düzeltildi: baseline artık aynı 750 ms uzunluğundaki iki başlangıç penceresinin daha yüksek RMS değerini kullanıyor. Böylece sabit ritim için pencere uzunluğundan doğan sahte 2× enerji farkı oluşmuyor; gerçek 4. saniye enerji yükselişi korunuyor.
+- Uniform pulse regression testi aynı şekilde tutuldu; yeni commit için tüm CI yeniden çalıştırılacak.
