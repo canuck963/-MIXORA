@@ -277,3 +277,10 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - İlk CI run #45835694240 yeni testte uniform 120 BPM pulse train için yanlış pozitif buldu: 1,5 saniyelik baseline ile 750 ms aday penceresi farklı uzunlukta olduğundan düzenli seyrek vuruşlar yapay enerji artışı gibi görünüyordu.
 - Algoritma düzeltildi: baseline artık aynı 750 ms uzunluğundaki iki başlangıç penceresinin daha yüksek RMS değerini kullanıyor. Böylece sabit ritim için pencere uzunluğundan doğan sahte 2× enerji farkı oluşmuyor; gerçek 4. saniye enerji yükselişi korunuyor.
 - Uniform pulse regression testi aynı şekilde tutuldu; yeni commit için tüm CI yeniden çalıştırılacak.
+### Nihai CI doğrulaması — 26 Kasım 2026, Enerjik giriş seçicisi
+
+- İlk deneme [Actions #45835694240](https://github.com/canuck963/-MIXORA/actions/runs/45835694240) uniform 120 BPM pulse train için yanlış pozitif gösterdi. 1,5 sn baseline ve 750 ms aday penceresinin farklı uzunlukta olması, sabit vuruşları yapay enerji artışı gibi gösterebiliyordu.
+- Düzeltme commit'i 11ff1ad baseline'ı eşit uzunlukta iki 750 ms pencerenin maksimum RMS değeriyle karşılaştırdı. Uniform enerji testi korundu; gerçek 4. saniye enerji artışı test edildi.
+- [Actions #45836023008](https://github.com/canuck963/-MIXORA/actions/runs/45836023008) **başarılı**: Node **74/74**, JavaScript/HTML syntax başarılı, Python **12/12**, Playwright Chromium ve WebKit mobil akışları başarılı.
+- Yeni testler: 120 BPM enerji yükselişini 4. saniyeye vuruş hizalı seçme; sabit enerji ve eşit güçlü beat/offbeat belirsizliğinde orijinal girişi koruma; Enerjik öneri entegrasyonu. Duygusal ve Sinematik öneri davranışları regresyon testinde değişmeden kaldı.
+- Bu CI sentetik sinyal doğrulamasıdır; gerçek şarkıların müzikal cümle/downbeat tespiti, fiziksel iPhone Safari ve kulakla kalite değerlendirmesi değildir. Pitch-preserving time-stretch ve üç ayrı WAV kalite karşılaştırması hâlâ açık.
