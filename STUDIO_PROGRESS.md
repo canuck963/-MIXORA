@@ -301,3 +301,10 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - İlk push CI [#46013633347](https://github.com/canuck963/-MIXORA/actions/runs/46013633347) Node aşamasında 73/77 testle başarısız oldu. Tek transient'i reddeden yeni test geçti; iki eski enerji-drop testi ve iki yeni gerçek-yükseliş testi, enerji penceresinin başlangıç kenarının vuruştan yaklaşık 250 ms önce kalması nedeniyle güvenli beat toleransını aşabildiğini gösterdi.
 - Düzeltme: beat arama hedefi artık 750 ms pencerenin başlangıç kenarı değil, ilk yükselen vuruşun beklenebileceği ilk üçte birlik nokta. Bu, sentetik 120 BPM örneğinde 4.0 sn / 6.0 sn vuruşunu tolerans içinde bulmayı sağlar; belirsiz analizde fallback davranışı değişmez.
 - Bu commit için tam CI yeniden çalıştırılıyor; başarılı sonuç gelmeden test paketi yeşil sayılmayacak.
+
+
+### 27 Kasım — Beat toleransı için ikinci CI düzeltmesi
+
+- İkinci CI denemesi [#46013805526](https://github.com/canuck963/-MIXORA/actions/runs/46013805526) aynı dört yükseliş testinin başarısız olduğunu doğruladı. İlk aday penceresi, yükselen bölümden önceki düşük seviyeli vuruşu da içerdiği için pencere başlangıcı + 1/3 hesabı hedef vuruşa hâlâ erken kalıyordu.
+- Beat arama hedefi artık 750 ms aday penceresinin merkezi; yakın vuruş toleransı BPM'e göre en fazla yarım beat (60–180 BPM aralığında 0,15–0,30 sn). Bu, pencere içinde ölçülen enerji yükselişini gözlenen vuruşla eşleştirirken pencere dışı uzak grid'e atlamayı sınırlar.
+- Bir sonraki CI sonucu bekleniyor. Önceki iki başarısız workflow açıkça kaydedildi; başarılı doğrulama gelmeden değişiklik yeşil kabul edilmeyecek.

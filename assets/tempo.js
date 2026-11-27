@@ -229,7 +229,7 @@ function alignOverlayPair(aBuffer, aStart, aEnd, bBuffer, bStart, bEnd, delay, m
   if (!a || !b || a.ambiguous || b.ambiguous) return null;
 
   function nearestBeat(analysis, target) {
-    const tolerance = Math.min(0.25, Math.max(0.06, 15 / analysis.bpm));
+    const tolerance = Math.min(0.3, Math.max(0.15, 30 / analysis.bpm));
     let nearest = null;
     for (const time of analysis.beats) {
       const distance = Math.abs(time - target);
@@ -356,7 +356,7 @@ function energeticDropEntry(buffer, start, end) {
   // The first elevated beat often sits in the first third of the RMS window;
   // aim there rather than at the window's leading edge, which may be a quarter
   // beat early and outside the alignment tolerance.
-  const target = start + strongest.offset + energyWindow / 3;
+  const target = start + strongest.offset + energyWindow / 2;
   const tolerance = Math.min(0.25, Math.max(0.06, 15 / analysis.bpm));
   let nearest = null;
   for (const beat of analysis.beats) {
