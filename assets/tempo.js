@@ -353,7 +353,10 @@ function energeticDropEntry(buffer, start, end) {
 
   const analysis = analyzeTempo(buffer, start, end);
   if (!analysis || analysis.ambiguous) return null;
-  const target = start + strongest.offset;
+  // The first elevated beat often sits in the first third of the RMS window;
+  // aim there rather than at the window's leading edge, which may be a quarter
+  // beat early and outside the alignment tolerance.
+  const target = start + strongest.offset + energyWindow / 3;
   const tolerance = Math.min(0.25, Math.max(0.06, 15 / analysis.bpm));
   let nearest = null;
   for (const beat of analysis.beats) {

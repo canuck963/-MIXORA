@@ -294,3 +294,10 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - `tests/tempo-match.test.cjs` üç regresyon ekler: tek transient reddi; transient sonrası gerçek yükselişin bulunması; daha sonra daha yüksek bir bölüm olsa da ilk sürdürülen yükselişin seçilmesi.
 - Yerel tam depo klonu bu çalışma ortamında DNS nedeniyle açılamadı (`github.com` çözümlenemedi). Bu nedenle tam test/build iddiası yapılmayacak; GitHub Actions aynı commit üzerinde Node, syntax, Python, Chromium ve WebKit kontrolleri için kullanılacak.
 - Fiziksel iPhone Safari, kullanım hakkı bulunan gerçek parçalarla dinleme/tempo drift, pitch-preserving time-stretch, üç WAV kalite karşılaştırması, gerçek SMTP ve üretim dağıtımı açık kalır. PR #1 taslak ve Issue #2 açık tutulur; `main` değiştirilmez.
+
+
+### 27 Kasım — İlk CI bulgusu ve beat hedefi düzeltmesi
+
+- İlk push CI [#46013633347](https://github.com/canuck963/-MIXORA/actions/runs/46013633347) Node aşamasında 73/77 testle başarısız oldu. Tek transient'i reddeden yeni test geçti; iki eski enerji-drop testi ve iki yeni gerçek-yükseliş testi, enerji penceresinin başlangıç kenarının vuruştan yaklaşık 250 ms önce kalması nedeniyle güvenli beat toleransını aşabildiğini gösterdi.
+- Düzeltme: beat arama hedefi artık 750 ms pencerenin başlangıç kenarı değil, ilk yükselen vuruşun beklenebileceği ilk üçte birlik nokta. Bu, sentetik 120 BPM örneğinde 4.0 sn / 6.0 sn vuruşunu tolerans içinde bulmayı sağlar; belirsiz analizde fallback davranışı değişmez.
+- Bu commit için tam CI yeniden çalıştırılıyor; başarılı sonuç gelmeden test paketi yeşil sayılmayacak.
