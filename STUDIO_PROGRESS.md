@@ -284,3 +284,13 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - [Actions #45836023008](https://github.com/canuck963/-MIXORA/actions/runs/45836023008) **başarılı**: Node **74/74**, JavaScript/HTML syntax başarılı, Python **12/12**, Playwright Chromium ve WebKit mobil akışları başarılı.
 - Yeni testler: 120 BPM enerji yükselişini 4. saniyeye vuruş hizalı seçme; sabit enerji ve eşit güçlü beat/offbeat belirsizliğinde orijinal girişi koruma; Enerjik öneri entegrasyonu. Duygusal ve Sinematik öneri davranışları regresyon testinde değişmeden kaldı.
 - Bu CI sentetik sinyal doğrulamasıdır; gerçek şarkıların müzikal cümle/downbeat tespiti, fiziksel iPhone Safari ve kulakla kalite değerlendirmesi değildir. Pitch-preserving time-stretch ve üç ayrı WAV kalite karşılaştırması hâlâ açık.
+
+## 27 Kasım 2026 — Enerjik girişte tek transient yanlış pozitifini engelleme
+
+- Kod incelemesinde `energeticDropEntry` fonksiyonunun 750 ms RMS penceresindeki tek yüksek kick/snare transient'ini enerji yükselişi sanabileceği görüldü. Bu, “sürdürülen enerji” hedefiyle uyumlu değildi.
+- Aday 750 ms pencere artık hemen arkasındaki ikinci, çakışmayan 750 ms pencereyle doğrulanıyor. İkinci pencere, adayın baseline üzerindeki enerji artışının en az %65'ini korumalı; böylece tek transient reddedilir, gerçek drop devamlılığı aranır.
+- Algoritma artık en yüksek seviyeli geç bölümü değil, doğrulamadan geçen ilk sürdürülen yükselişi seçer. Bu, daha sonra gelen daha yüksek outro/zirve yerine ilk uygun drop girişini tercih eder.
+- Güvenli fallback korunur: doğrulanan aday veya belirsiz olmayan beat-grid bulunamazsa Enerjik önerinin mevcut kesit başlangıcı değişmez.
+- `tests/tempo-match.test.cjs` üç regresyon ekler: tek transient reddi; transient sonrası gerçek yükselişin bulunması; daha sonra daha yüksek bir bölüm olsa da ilk sürdürülen yükselişin seçilmesi.
+- Yerel tam depo klonu bu çalışma ortamında DNS nedeniyle açılamadı (`github.com` çözümlenemedi). Bu nedenle tam test/build iddiası yapılmayacak; GitHub Actions aynı commit üzerinde Node, syntax, Python, Chromium ve WebKit kontrolleri için kullanılacak.
+- Fiziksel iPhone Safari, kullanım hakkı bulunan gerçek parçalarla dinleme/tempo drift, pitch-preserving time-stretch, üç WAV kalite karşılaştırması, gerçek SMTP ve üretim dağıtımı açık kalır. PR #1 taslak ve Issue #2 açık tutulur; `main` değiştirilmez.

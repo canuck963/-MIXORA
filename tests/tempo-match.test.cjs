@@ -224,3 +224,41 @@ test('live DJ deck uses the shared confidence-aware tempo analyzer',()=>{
   assert.match(html,/analyzeTempo\(buffer,0,Math\.min\(buffer\.duration,30\)\)/);
   assert.match(html,/tempo\??\.ambiguous/);
 });
+
+
+function steppedPulseBuffer(lifts = [], transientAt = null) {
+  const rate = 48000, seconds = 12, length = rate * seconds;
+  const right = new Float32Array(length);
+  const pulse = (time, strength) => {
+    const from = Math.round(time * rate);
+    const to = Math.min(length, from + Math.round(.04 * rate));
+    right.fill(strength, from, to);
+  };
+  for (let time = 1; time < seconds - .2; time += .5) {
+    let strength = .1;
+    for (const lift of lifts) if (time >= lift.at) strength = lift.level;
+    pulse(time, strength);
+  }
+  if (transientAt !== null) pulse(transientAt, .95);
+  return {sampleRate:rate,length,numberOfChannels:1,getChannelData:()=>right,duration:seconds};
+}
+
+test('energetic entry rejects a single loud transient without a sustained follow-through',()=>{
+  const buffer=steppedPulseBuffer([],3);
+  assert.equal(energeticDropEntry(buffer,0,12),null);
+});
+
+test('energetic entry skips an isolated transient and finds the later sustained lift',()=>{
+  const result=energeticDropEntry(steppedPulseBuffer([{at:6,level:.7}],3),0,12);
+  assert.ok(result);
+  assert.ok(Math.abs(result.start-6)<.03);
+  assert.ok(result.confirmationRatio>=1.5);
+});
+
+test('energetic entry chooses the first sustained rise instead of a louder later section',()=>{
+  const result=energeticDropEntry(steppedPulseBuffer([
+    {at:4,level:.4},{at:8,level:.8}
+  ]),0,12);
+  assert.ok(result);
+  assert.ok(Math.abs(result.start-4)<.03);
+});

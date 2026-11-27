@@ -324,18 +324,32 @@ function energeticDropEntry(buffer, start, end) {
   const baselineA = rms(start, Math.min(end, start + energyWindow));
   const baselineB = rms(start + energyWindow, Math.min(end, start + baselineWindow));
   const baseline = baselineA === null || baselineB === null ? null : Math.max(baselineA, baselineB);
-  const maxOffset = Math.min(12, end - start - energyWindow);
+  // Reserve a second, non-overlapping window to verify that a candidate is
+  // sustained. A single loud kick/snare must not become the remix entry.
+  const maxOffset = Math.min(12, end - start - energyWindow * 2);
   if (baseline === null || maxOffset < baselineWindow) return null;
 
-  let strongest = {level: baseline, offset: null};
+  const threshold = Math.max(baseline * 1.5, baseline + 0.012, 0.02);
+  let strongest = null;
   for (let offset = baselineWindow; offset <= maxOffset + 1e-9; offset += 0.25) {
     const level = rms(start + offset, Math.min(end, start + offset + energyWindow));
-    if (level !== null && level > strongest.level) strongest = {level, offset};
-  }
+    if (level === null || level < threshold) continue;
 
-  // Require a sustained and material lift; a single loud transient is not enough.
-  const threshold = Math.max(baseline * 1.5, baseline + 0.012, 0.02);
-  if (strongest.offset === null || strongest.level < threshold) return null;
+    // The following 750 ms window must retain at least 65% of the candidate's
+    // lift above baseline. This rejects isolated transients while allowing a
+    // gradual drop whose energy settles after the initial rise.
+    const confirmation = rms(
+      start + offset + energyWindow,
+      Math.min(end, start + offset + energyWindow * 2)
+    );
+    const requiredConfirmation = baseline + (level - baseline) * 0.65;
+    if (confirmation === null || confirmation < requiredConfirmation) continue;
+
+    // Choose the first sustained rise, not a louder later section/outro.
+    strongest = {level, offset, confirmation};
+    break;
+  }
+  if (!strongest) return null;
 
   const analysis = analyzeTempo(buffer, start, end);
   if (!analysis || analysis.ambiguous) return null;
@@ -354,7 +368,8 @@ function energeticDropEntry(buffer, start, end) {
     start: nearest.time,
     bpm: analysis.bpm,
     confidence: analysis.confidence,
-    energyRatio: strongest.level / Math.max(baseline, 0.005)
+    energyRatio: strongest.level / Math.max(baseline, 0.005),
+    confirmationRatio: strongest.confirmation / Math.max(baseline, 0.005)
   };
 }
 
