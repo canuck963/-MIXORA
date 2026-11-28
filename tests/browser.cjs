@@ -42,6 +42,19 @@ function wavPeak(bytes){assert.equal(bytes.toString('ascii',0,4),'RIFF');let pea
  await page.unroute('**/api/reset-password');
  await page.goto('http://localhost:8000/Remix.html');
  const wsolaRuntime=await page.evaluate(()=>({type:typeof MixoraWsola,moduleType:typeof module}));assert.equal(wsolaRuntime.type,'object',name+' WSOLA global export missing: '+JSON.stringify(wsolaRuntime));
+ await page.evaluate(()=>{
+  window.__wsolaHashes=[];
+  const original=MixoraWsola.stretchAudioBufferAsync;
+  MixoraWsola.stretchAudioBufferAsync=async function(...args){
+   const buffer=await original.apply(this,args),word=new DataView(new ArrayBuffer(4));let hash=2166136261;
+   for(let channel=0;channel<buffer.numberOfChannels;channel++){
+    const samples=buffer.getChannelData(channel);
+    for(let i=0;i<samples.length;i++){word.setFloat32(0,samples[i],true);hash=Math.imul(hash^word.getUint32(0,true),16777619);}
+   }
+   window.__wsolaHashes.push({start:args[1],end:args[2],rate:args[3],hash:hash>>>0,duration:buffer.duration});
+   return buffer;
+  };
+ });
  for(const id of ['A','B']){await page.locator('#file'+id).setInputFiles({name:id+'.wav',mimeType:'audio/wav',buffer:pulseWav(id==='A'?120:100)});await page.waitForFunction(id=>document.getElementById('name'+id).textContent.includes('.wav'),id);}
  await page.locator('#startA').fill('0.25');await page.locator('#endA').fill('9.75');await page.locator('#startB').fill('0.5');await page.locator('#endB').fill('9.75');
  await page.locator('#analyzeTempoMatch').click();await page.waitForFunction(()=>document.getElementById('tempoMatchStatus').textContent.includes('A 120 BPM')&&document.getElementById('tempoMatchStatus').textContent.includes('B 100 BPM'));
@@ -50,7 +63,7 @@ function wavPeak(bytes){assert.equal(bytes.toString('ascii',0,4),'RIFF');let pea
   const before=await page.evaluate(()=>JSON.stringify({clips,fade:document.getElementById('fade').value}));
   await page.locator('[data-preview="'+i+'"]').click();
   try{
-   await page.waitForFunction(()=>/önizlemesi\\.|Ses başlatılamadı|Remix oynatılıyor/.test(document.getElementById('status').textContent),null,{timeout:20000});
+   await page.waitForFunction(()=>/önizlemesi\.|Ses başlatılamadı|Remix oynatılıyor/.test(document.getElementById('status').textContent),null,{timeout:20000});
   }catch(error){
    const diagnostic=await page.evaluate(()=>({status:document.getElementById('status').textContent,audioState:ctx.state,playbackVersion,stretchAborted:stretchAbortController?.signal?.aborted??null,loaded:Object.fromEntries(Object.entries(tracks).map(([id,t])=>[id,!!t?.buffer])),clipCount:clips.length}));
    throw Error(name+' preview did not settle: '+JSON.stringify(diagnostic)+'; page errors: '+errors.join(' | ')+'; '+error.message);
@@ -68,10 +81,22 @@ function wavPeak(bytes){assert.equal(bytes.toString('ascii',0,4),'RIFF');let pea
   assert.match(await page.locator('#status').textContent(),/Remix oynatılıyor/,'suggestion '+i+' applied preview failed');
   await page.locator('#stop').click();assert.equal(await page.locator('#clips .clip').count(),2);
  }
+ const previewHash=await page.evaluate(()=>{
+  const rows=window.__wsolaHashes.filter(x=>Math.abs(x.start-.5)<.001&&Math.abs(x.end-9.75)<.001&&Math.abs(x.rate-1.2)<.01);
+  if(!rows.length)throw Error('WSOLA preview output was not captured');
+  return rows.at(-1);
+ });
  await page.locator('#saveProject').click();await page.waitForFunction(()=>/saklandı|İşlem tamamlanamadı/.test(document.getElementById('status').textContent));assert.match(await page.locator('#status').textContent(),/saklandı/);
  await page.locator('#clear').click();await page.locator('#restoreProject').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Proje açıldı'));
  assert.equal(await page.locator('#startA').inputValue(),'0.25');assert.equal(await page.locator('#startB').inputValue(),'0.5');assert.ok(Math.abs(await page.evaluate(()=>clips[1].stretchRate)-1.2)<.01,'saved project must retain WSOLA rate');
  const downloadPromise=page.waitForEvent('download');await page.locator('#export').click();const download=await downloadPromise;const path=await download.path();const out=fs.readFileSync(path);assert.equal(out.toString('ascii',0,4),'RIFF');assert.ok(out.length>10000);
+ const exportHash=await page.evaluate(()=>{
+  const rows=window.__wsolaHashes.filter(x=>Math.abs(x.start-.5)<.001&&Math.abs(x.end-9.75)<.001&&Math.abs(x.rate-1.2)<.01);
+  return rows.at(-1);
+ });
+ assert.ok(exportHash,'WSOLA WAV export output was not captured');
+ assert.equal(exportHash.hash,previewHash.hash,'WSOLA preview and WAV export must render identical B samples');
+ assert.ok(Math.abs(exportHash.duration-previewHash.duration)<1e-6,'WSOLA preview and WAV export durations must match');
  let energy=0,peak=0;for(let i=44;i<out.length;i+=2){const sample=out.readInt16LE(i)/32768;energy+=Math.abs(out.readInt16LE(i));peak=Math.max(peak,Math.abs(sample));}assert.ok(energy>100000,'rendered audio is not silent');assert.ok(peak<=Math.pow(10,-1/20)+1/32768,'WAV sample peak exceeds the -1 dBFS ceiling');
  await page.evaluate(()=>{window.__peakCalls=0;const apply=MixCore.applyPeakCeiling;MixCore.applyPeakCeiling=(buffer,ceiling)=>{window.__peakCalls++;return apply(buffer,ceiling);};});
  await page.locator('#saveLocalMix').click();await page.waitForFunction(()=>/Remix kaydedildi|İşlem tamamlanamadı/.test(document.getElementById('status').textContent));assert.match(await page.locator('#status').textContent(),/Remix kaydedildi/);

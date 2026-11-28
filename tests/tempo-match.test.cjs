@@ -265,3 +265,18 @@ test('energetic entry chooses the first sustained rise instead of a louder later
 
 test('applied WSOLA tempo rate attaches only to B clips in all three suggestions',()=>{const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync('assets/studio.js','utf8');const select=source.slice(source.indexOf('function selectedSuggestion'),source.indexOf('for(let i=0;i<3;i++)')),buffer=energyLiftBuffer(),values={startA:0,endA:12,startB:0,endB:12};const scope=vm.createContext({tracks:{A:{buffer},B:{buffer}},$:id=>({value:values[id]}),MixCore:{suggestions},MixoraWsola:{MAX_DURATION_SECONDS:30},appliedTempoRate:1.2,...require('../assets/tempo.js')});vm.runInContext(select,scope);for(let i=0;i<3;i++){const s=scope.selectedSuggestion(i);assert.equal(s.clips.find(c=>c.id==='B').stretchRate,1.2);assert.equal(s.clips.find(c=>c.id==='A').stretchRate,undefined);}});
 test('Remix Studio exposes opt-in WSOLA controls and prepared preview/export buffers',()=>{const fs=require('node:fs'),html=fs.readFileSync('Remix.html','utf8'),studio=fs.readFileSync('assets/studio.js','utf8');assert.match(html,/assets\/wsola\.js/);assert.match(html,/prepareStretchedBuffers\(list,ctx(?:,controller\?\.signal)?\)/);assert.match(html,/prepareStretchedBuffers\(clips,off\)/);assert.match(studio,/id="analyzeTempoMatch"/);assert.match(studio,/id="applyTempoMatch"/);assert.match(studio,/stretchAudioBufferAsync/);});
+
+
+test('WSOLA tempo UI rejects excerpts that exceed the mobile output-buffer budget',()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync('assets/studio.js','utf8');
+ const start=source.indexOf('function validateTempoStretchBudget');
+ const end=source.indexOf('function resetTempoMatch',start);
+ assert.ok(start>=0&&end>start,'budget guard must remain a standalone helper');
+ const scope=vm.createContext({MixoraWsola:{MAX_DURATION_SECONDS:30,MAX_OUTPUT_BYTES:24*1024*1024}});
+ vm.runInContext(source.slice(start,end)+';this.validateBudget=validateTempoStretchBudget;',scope);
+ const normal={sampleRate:48000,length:48000*30,duration:30,numberOfChannels:2};
+ assert.doesNotThrow(()=>scope.validateBudget(normal,0,20,1.2));
+ const large={sampleRate:96000,length:96000*30,duration:30,numberOfChannels:2};
+ assert.throws(()=>scope.validateBudget(large,0,30,.8),/24 MiB/);
+ assert.throws(()=>scope.validateBudget(normal,0,31,1),/geçersiz/);
+});

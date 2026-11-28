@@ -314,3 +314,14 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 
 - Yeni WSOLA test paketi ve tarayıcı akışı PR #8 dalına işlendi. Node/syntax/Python/Chromium/WebKit sonuçları tamamlanana kadar bu özellik doğrulanmış sayılmayacak.
 - B kesiti 30 saniyeyi aşarsa manuel eklemede stretch oranı klibe yazılmaz; 30 saniyelik sınır aşılmaz. Hazır Seha/Gazapizm taslağı otomatik tempo oranı almaz; kullanıcı kısa bir B kesiti seçip açıkça uygular.
+
+
+## 28 Kasım 2026 — WSOLA iPhone bellek sınırı ve önizleme/WAV eşitliği
+
+- Kod incelemesi: `stretchAudioBufferAsync` önce her kanal için tam boyutlu `Float32Array` çıktı oluşturuyor, sonra aynı veriyi ikinci kez `AudioBuffer` içine kopyalıyordu. 30 saniyelik 96 kHz stereo kesitte bu, çıktı için yaklaşık 57,6 MB geçici + kalıcı tampon ayırabiliyordu.
+- `assets/wsola.js`: WSOLA artık doğrudan hedef `AudioBuffer` kanal dizilerine yazar; tam boyutlu ara kanal kopyaları kaldırıldı. Ek olarak çıktı tamponu 24 MiB ile sınırlandırıldı; yüksek örnekleme hızlı stereo kesitlerde kullanıcıdan daha kısa bölüm seçmesi istenir. İptal edilen işlem tamamlanmış önbelleğe eklenmez.
+- `assets/studio.js`: tempo eşitleme analiz aşamasında B kesitinin süre ve çıktı belleği bütçesi kontrol edilir; mevcut B klipleri uygulanırken de aynı kontrol tekrarlanır.
+- `tests/wsola.test.cjs` 96 kHz stereo / 0,80× örneğinde 24 MiB sınırını, `tests/tempo-match.test.cjs` ise UI bütçe kapısını doğrular.
+- `tests/browser.cjs`: WSOLA'nın gerçek tarayıcıda yüklendiğini kontrol etmeye devam eder; önizlemede ve proje geri yüklendikten sonraki WAV dışa aktarmada üretilen B kesitinin PCM hash ve süresi karşılaştırılır. Böylece aynı kaynak/kesit/hız için önizleme ile export'un aynı WSOLA örneklerini kullandığı doğrulanır.
+- Önceki head `0d9c00e` için push/PR CI #46156166508 / #46156170488 tarayıcı adımında başarısız oldu. Node, syntax ve Python adımları geçti. Hata WSOLA ses üretiminden değil, browser test regex'inin nokta kaçışını iki kez yazmasından kaynaklandı; gerçek `önizlemesi.` durumuyla eşleşmedi. Regex düzeltildi; yeni CI sonucu bekleniyor.
+- Fiziksel iPhone Safari, gerçek iki ticari/kullanım hakkı bulunan parçada kulakla kalite/tempo drift, phrase/downbeat tespiti, stem separation, gerçek SMTP ve üretim dağıtımı açık kalır. PR #1 taslak ve Issue #2 açık tutulur; `main` değiştirilmez.

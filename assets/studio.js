@@ -1,9 +1,24 @@
 /* Extends the existing editor without replacing manual editing, overlay or WAV export. */
 'use strict';
 const studioPanel=document.createElement('section');studioPanel.className='card';
-studioPanel.innerHTML='<h2>✦ Üç farklı remix yönü</h2><p>Aynı iki parçadan üç düzenleme taslağı. Bunlar kurallı önerilerdir; vokal ayrımı veya müzikal cümle analizi yapmaz. A ve B için başlangıç/bitiş seç. Önerileri çizelgeni değiştirmeden dinle, beğendiğini uygula. Yapay bas efekti eklenmez.</p><h3>🎚️ Perdeyi koruyarak tempo eşitleme (beta)</h3><p>Seçili A/B kesitlerinin BPM değerlerini karşılaştır. Güvenilir sonuç varsa B parçasını 0,80–1,25× aralığında WSOLA ile A temposuna yaklaştırır. İşlem yalnızca cihazda yapılır; B kesiti en fazla 30 saniye olmalı.</p><button id="analyzeTempoMatch" class="muted">A/B temposunu analiz et</button><button id="applyTempoMatch" disabled>B parçasını A temposuna eşitle</button><button id="clearTempoMatch" class="muted" disabled>Tempo eşitlemeyi kaldır</button><p id="tempoMatchStatus" class="tiny" role="status">Önce iki parçayı yükle. Analiz otomatik oynatma yapmaz.</p><div id="threeSuggestions" class="suggestions"></div><h3>Çalışmanı sakla</h3><label>Proje adı<input id="projectName" maxlength="90" value="Yeni remix"></label><button id="saveProject">Projeyi bu cihazda sakla</button><button id="restoreProject" class="muted">Son projeyi aç</button><button id="saveLocalMix">Remixi cihaz kütüphaneme kaydet</button><a class="studio-link" href="community.html">Toplulukta yayımla ↗</a><p class="tiny">Proje ses dosyalarını da saklar. Cihaz depolaması temizlenirse kaybolabilir; WAV yedeğini indir. Toplulukta yayımlamak için WAV dosyanı seç.</p>';
+studioPanel.innerHTML='<h2>✦ Üç farklı remix yönü</h2><p>Aynı iki parçadan üç düzenleme taslağı. Bunlar kurallı önerilerdir; vokal ayrımı veya müzikal cümle analizi yapmaz. A ve B için başlangıç/bitiş seç. Önerileri çizelgeni değiştirmeden dinle, beğendiğini uygula. Yapay bas efekti eklenmez.</p><h3>🎚️ Perdeyi koruyarak tempo eşitleme (beta)</h3><p>Seçili A/B kesitlerinin BPM değerlerini karşılaştır. Güvenilir sonuç varsa B parçasını 0,80–1,25× aralığında WSOLA ile A temposuna yaklaştırır. İşlem yalnızca cihazda yapılır; B kesiti en fazla 30 saniye ve çıktı tamponu 24 MiB olmalı.</p><button id="analyzeTempoMatch" class="muted">A/B temposunu analiz et</button><button id="applyTempoMatch" disabled>B parçasını A temposuna eşitle</button><button id="clearTempoMatch" class="muted" disabled>Tempo eşitlemeyi kaldır</button><p id="tempoMatchStatus" class="tiny" role="status">Önce iki parçayı yükle. Analiz otomatik oynatma yapmaz.</p><div id="threeSuggestions" class="suggestions"></div><h3>Çalışmanı sakla</h3><label>Proje adı<input id="projectName" maxlength="90" value="Yeni remix"></label><button id="saveProject">Projeyi bu cihazda sakla</button><button id="restoreProject" class="muted">Son projeyi aç</button><button id="saveLocalMix">Remixi cihaz kütüphaneme kaydet</button><a class="studio-link" href="community.html">Toplulukta yayımla ↗</a><p class="tiny">Proje ses dosyalarını da saklar. Cihaz depolaması temizlenirse kaybolabilir; WAV yedeğini indir. Toplulukta yayımlamak için WAV dosyanı seç.</p>';
 document.querySelector('main').append(studioPanel);
 let analyzedTempoRate=null,appliedTempoRate=null;
+function validateTempoStretchBudget(buffer,start,end,rate){
+ if(!buffer||!Number.isFinite(start)||!Number.isFinite(end)||!Number.isFinite(rate)||
+    start<0||end<=start||end>buffer.duration+.001||rate<.8||rate>1.25||
+    !Number.isInteger(buffer.numberOfChannels)||buffer.numberOfChannels<1||buffer.numberOfChannels>2)
+  throw Error('Tempo eşitleme için B kesiti geçersiz.');
+ const first=Math.max(0,Math.floor(start*buffer.sampleRate));
+ const last=Math.min(buffer.length,Math.ceil(end*buffer.sampleRate));
+ const frames=last-first;
+ if(frames<Math.ceil(buffer.sampleRate*.15)||frames>buffer.sampleRate*MixoraWsola.MAX_DURATION_SECONDS)
+  throw Error('Perde koruyan tempo eşitleme için B kesiti 0,15–30 saniye olmalı.');
+ const outputFrames=Math.max(1,Math.round(frames/rate));
+ const outputBytes=outputFrames*buffer.numberOfChannels*Float32Array.BYTES_PER_ELEMENT;
+ if(!Number.isSafeInteger(outputBytes)||outputBytes>MixoraWsola.MAX_OUTPUT_BYTES)
+  throw Error('Bu B kesiti cihaz bellek sınırını aşıyor. Daha kısa kesit seç (WSOLA çıktı sınırı 24 MiB).');
+}
 function resetTempoMatch(message='Kaynak veya kesit değişti; yeniden analiz et.') {
  analyzedTempoRate=null;appliedTempoRate=null;window.MixoraTempoStretchRate=null;
  for(const clip of clips)if(clip.id==='B')delete clip.stretchRate;
@@ -19,6 +34,7 @@ $('analyzeTempoMatch').onclick=()=>{
   if(a.ambiguous||b.ambiguous)throw Error('Tempo belirsiz (yarım/çift zaman veya düzensiz vuruş). Otomatik eşitleme yapılmadı.');
   const match=tempoMatch(a.bpm,b.bpm,.8,1.25);
   if(!match||!match.hasInRange)throw Error('B parçasını A temposuna getirmek için gereken hız 0,80–1,25 aralığının dışında.');
+  validateTempoStretchBudget(tracks.B.buffer,Number($('startB').value),Number($('endB').value),match.recommended.rate);
   analyzedTempoRate=match.recommended.rate;$('applyTempoMatch').disabled=false;
   $('tempoMatchStatus').textContent='A '+a.bpm+' BPM · B '+b.bpm+' BPM · B için '+analyzedTempoRate.toFixed(2)+'× önerildi. Uygulamak için düğmeye bas.';
   note('Tempo analizi hazır. B parçası henüz değiştirilmedi.');
@@ -29,7 +45,7 @@ $('applyTempoMatch').onclick=()=>{
   if(analyzedTempoRate===null)throw Error('Önce A/B temposunu analiz et.');
   if(typeof MixoraWsola==='undefined')throw Error('WSOLA motoru yüklenemedi. Sayfayı yenile.');
   const targets=clips.filter(clip=>clip.id==='B');
-  if(targets.some(clip=>clip.end-clip.start>MixoraWsola.MAX_DURATION_SECONDS))throw Error('Mevcut B kesitlerinden biri 30 saniyeyi aşıyor. Daha kısa kesit seç.');
+  for(const clip of targets)validateTempoStretchBudget(tracks.B.buffer,clip.start,clip.end,analyzedTempoRate);
   appliedTempoRate=analyzedTempoRate;window.MixoraTempoStretchRate=appliedTempoRate;targets.forEach(clip=>clip.stretchRate=appliedTempoRate);
   $('clearTempoMatch').disabled=false;$('tempoMatchStatus').textContent+=' B kesitlerine perde korunarak uygulanacak.';
   if(clips.length)render();note('Tempo eşitleme ayarı hazır. Önizleme ve WAV aynı WSOLA çıktısını kullanacak.');

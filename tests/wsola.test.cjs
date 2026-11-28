@@ -32,3 +32,11 @@ test('WSOLA API is exported to both CommonJS and browser global scope',()=>{
  const api=require('../assets/wsola.js');
  assert.strictEqual(globalThis.MixoraWsola,api);
 });
+
+
+test('WSOLA rejects output buffers above the 24 MiB mobile allocation budget before rendering',()=>{
+ const sr=96000,frames=sr*30;
+ const left=new Float32Array(frames),right=new Float32Array(frames);
+ assert.throws(()=>stretchChannels([left,right],sr,.8),/24 MiB/);
+ assert.equal(require('../assets/wsola.js').MAX_OUTPUT_BYTES,24*1024*1024);
+});
