@@ -41,6 +41,7 @@ function wavPeak(bytes){assert.equal(bytes.toString('ascii',0,4),'RIFF');let pea
  await page.goto('http://localhost:8000/api/reset-password');assert.equal(await page.locator('#confirm').isDisabled(),true);
  await page.unroute('**/api/reset-password');
  await page.goto('http://localhost:8000/Remix.html');
+ const wsolaRuntime=await page.evaluate(()=>({type:typeof MixoraWsola,moduleType:typeof module}));assert.equal(wsolaRuntime.type,'object',name+' WSOLA global export missing: '+JSON.stringify(wsolaRuntime));
  for(const id of ['A','B']){await page.locator('#file'+id).setInputFiles({name:id+'.wav',mimeType:'audio/wav',buffer:pulseWav(id==='A'?120:100)});await page.waitForFunction(id=>document.getElementById('name'+id).textContent.includes('.wav'),id);}
  await page.locator('#startA').fill('0.25');await page.locator('#endA').fill('9.75');await page.locator('#startB').fill('0.5');await page.locator('#endB').fill('9.75');
  await page.locator('#analyzeTempoMatch').click();await page.waitForFunction(()=>document.getElementById('tempoMatchStatus').textContent.includes('A 120 BPM')&&document.getElementById('tempoMatchStatus').textContent.includes('B 100 BPM'));
