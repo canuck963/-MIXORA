@@ -27,6 +27,7 @@ $('analyzeTempoMatch').onclick=()=>{
 $('applyTempoMatch').onclick=()=>{
  try{
   if(analyzedTempoRate===null)throw Error('Önce A/B temposunu analiz et.');
+  if(typeof MixoraWsola==='undefined')throw Error('WSOLA motoru yüklenemedi. Sayfayı yenile.');
   const targets=clips.filter(clip=>clip.id==='B');
   if(targets.some(clip=>clip.end-clip.start>MixoraWsola.MAX_DURATION_SECONDS))throw Error('Mevcut B kesitlerinden biri 30 saniyeyi aşıyor. Daha kısa kesit seç.');
   appliedTempoRate=analyzedTempoRate;window.MixoraTempoStretchRate=appliedTempoRate;targets.forEach(clip=>clip.stretchRate=appliedTempoRate);
@@ -39,6 +40,7 @@ for(const id of ['fileA','fileB']){const element=$(id);if(typeof element.addEven
 for(const id of ['startA','endA','startB','endB']){const element=$(id);if(typeof element.addEventListener==='function')element.addEventListener('input',()=>resetTempoMatch());}
 const suggestionNames=['Duygusal','Enerjik','Sinematik'];
 function selectedSuggestion(i){
+  if(typeof appliedTempoRate!=='undefined'&&appliedTempoRate!==null&&typeof MixoraWsola==='undefined')throw Error('WSOLA motoru yüklenemedi. Sayfayı yenile.');
   const ranges={};for(const id of ['A','B'])ranges[id]={start:Number($('start'+id).value),end:Number($('end'+id).value)};
   const suggestion = MixCore.suggestions(tracks.A?.buffer.duration, tracks.B?.buffer.duration, ranges)[i];
   if(typeof appliedTempoRate!=='undefined'&&appliedTempoRate!==null){for(const clip of suggestion.clips){if(clip.id!=='B')continue;if(clip.end-clip.start>MixoraWsola.MAX_DURATION_SECONDS)suggestion.description+=' B kesiti 30 saniyeyi aştığı için WSOLA tempo eşitlemesi uygulanmadı.';else clip.stretchRate=appliedTempoRate;}}
@@ -95,6 +97,7 @@ const previewStop=document.createElement('button');previewStop.textContent='⏹ 
 function openDB(name,store){return new Promise((resolve,reject)=>{const r=indexedDB.open(name,1);r.onupgradeneeded=()=>r.result.createObjectStore(store,{keyPath:'id'});r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
 async function writeDB(name,store,value){const db=await openDB(name,store);try{await new Promise((resolve,reject)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).put(value);t.oncomplete=resolve;t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||Error('Kayıt iptal edildi.'));});}finally{db.close();}}
 async function prepareStretchedBuffers(list,context,signal){
+ if(list.some(clip=>Math.abs((clip.stretchRate??1)-1)>=.005)&&typeof MixoraWsola==='undefined')throw Error('WSOLA motoru yüklenemedi. Sayfayı yenile.');
  const prepared=new Map();
  for(const clip of list){if(signal?.aborted){const error=new Error('WSOLA işlemi iptal edildi.');error.name='AbortError';throw error;}const rate=clip.stretchRate??1;if(Math.abs(rate-1)<.005)continue;const track=tracks[clip.id];if(!track?.buffer)throw Error(clip.id+' kaynak sesi bulunamadı.');if(clip.end-clip.start>MixoraWsola.MAX_DURATION_SECONDS)throw Error('WSOLA tempo eşitlemesi en fazla 30 saniyelik kesitlerde kullanılabilir.');prepared.set(clip,await MixoraWsola.stretchAudioBufferAsync(track.buffer,clip.start,clip.end,rate,context,{signal}));}
  return prepared;
