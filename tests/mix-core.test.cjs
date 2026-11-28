@@ -384,3 +384,9 @@ test('advanced Remix Studio reuses one preview compressor bus across auditions',
   assert.equal(offline.state.compressors, 1, 'offline export gets its own context-local bus');
   assert.notEqual(offline.state.lastMaster, firstBus, 'offline render must not reuse the live output bus');
 });
+
+test('timeline accounts for pitch-preserving stretch without changing source ranges',()=>{
+ const list=[{id:'A',start:0,end:10},{id:'B',start:5,end:15,stretchRate:1.25}],result=plan(list,2);
+ assert.equal(result.items[1].dur,8);assert.equal(result.items[1].c.start,5);assert.equal(result.items[1].c.end,15);assert.equal(result.length,16);
+ for(const rate of [.79,1.251,NaN,Infinity,'1.1'])assert.throws(()=>plan([{id:'B',start:0,end:10,stretchRate:rate}]));
+});
