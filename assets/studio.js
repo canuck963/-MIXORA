@@ -35,13 +35,13 @@ $('applyTempoMatch').onclick=()=>{
  }catch(error){note(error.message);$('tempoMatchStatus').textContent=error.message;}
 };
 $('clearTempoMatch').onclick=()=>resetTempoMatch('Tempo eşitleme kaldırıldı; kaynak sesler özgün hızında çalacak.');
-for(const id of ['fileA','fileB'])$(id).addEventListener('change',()=>resetTempoMatch());
-for(const id of ['startA','endA','startB','endB'])$(id).addEventListener('input',()=>resetTempoMatch());
+for(const id of ['fileA','fileB']){const element=$(id);if(typeof element.addEventListener==='function')element.addEventListener('change',()=>resetTempoMatch());}
+for(const id of ['startA','endA','startB','endB']){const element=$(id);if(typeof element.addEventListener==='function')element.addEventListener('input',()=>resetTempoMatch());}
 const suggestionNames=['Duygusal','Enerjik','Sinematik'];
 function selectedSuggestion(i){
   const ranges={};for(const id of ['A','B'])ranges[id]={start:Number($('start'+id).value),end:Number($('end'+id).value)};
   const suggestion = MixCore.suggestions(tracks.A?.buffer.duration, tracks.B?.buffer.duration, ranges)[i];
-  if(appliedTempoRate!==null){for(const clip of suggestion.clips){if(clip.id!=='B')continue;if(clip.end-clip.start>MixoraWsola.MAX_DURATION_SECONDS)suggestion.description+=' B kesiti 30 saniyeyi aştığı için WSOLA tempo eşitlemesi uygulanmadı.';else clip.stretchRate=appliedTempoRate;}}
+  if(typeof appliedTempoRate!=='undefined'&&appliedTempoRate!==null){for(const clip of suggestion.clips){if(clip.id!=='B')continue;if(clip.end-clip.start>MixoraWsola.MAX_DURATION_SECONDS)suggestion.description+=' B kesiti 30 saniyeyi aştığı için WSOLA tempo eşitlemesi uygulanmadı.';else clip.stretchRate=appliedTempoRate;}}
   if (i === 0) {
     const [a, b] = suggestion.clips;
     const maxOverlap = Math.min(suggestion.fade, (a.end - a.start) / 2, (b.end - b.start) / 2);
