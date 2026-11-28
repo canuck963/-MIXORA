@@ -161,6 +161,7 @@ test('stop and newer playback cancel pending audio resumes in both editors', asy
     let starts = 0;
     const gain = {setValueAtTime(){}, linearRampToValueAtTime(){}};
     const scope = vm.createContext({
+      AbortController,
       ctx: {resume: () => new Promise(resolve => pending.push(resolve)), currentTime: 0,
         createBufferSource: () => ({connect: () => ({connect(){}}), start(){starts++;}, stop(){}}),
         createGain: () => ({gain})},
@@ -168,7 +169,7 @@ test('stop and newer playback cancel pending audio resumes in both editors', asy
       performance: {now: () => 0}, schedule: () => {starts++; return 2;},
       fadeTime: () => 0, total: () => 2, sec: String, tracks: {A: {buffer: {}}}
     });
-    vm.runInContext('let sources=[],active=[],timer=null,stopTimer=null,playbackVersion=0;\n' + stop + '\n' + play, scope);
+    vm.runInContext('let sources=[],active=[],timer=null,stopTimer=null,playbackVersion=0,stretchAbortController=null;\n' + stop + '\n' + play, scope);
     const clips = [{id:'A', start:0, end:2}];
     const stopped = scope[name](clips);
     scope.stop();
@@ -241,10 +242,10 @@ test('audio errors stop partial playback, allow retry, and stale failures stay s
     const pending = [];
     const ctx = {resume: () => new Promise((resolve,reject) => pending.push({resolve,reject})),
       createBufferSource(){throw Error('audio failed');}};
-    const scope = vm.createContext({ctx, $:()=>({style:{},value:1}), note:s=>{message=s;},
+    const scope = vm.createContext({AbortController,ctx, $:()=>({style:{},value:1}), note:s=>{message=s;},
       clearTimeout(){}, setTimeout(){}, performance:{now:()=>0}, fadeTime:()=>0,
       schedule(){throw Error('audio failed');}});
-    vm.runInContext('let playbackVersion=0,sources=[],active=[],timer=null,stopTimer=null;\n'+
+    vm.runInContext('let playbackVersion=0,sources=[],active=[],timer=null,stopTimer=null,stretchAbortController=null;\n'+
       html.match(/function stop\(\).*$/m)[0]+'\n'+
       html.match(new RegExp('async function '+name+'\\(.*$','m'))[0],scope);
     const list=[{id:'A',start:0,end:2}];
@@ -389,4 +390,24 @@ test('timeline accounts for pitch-preserving stretch without changing source ran
  const list=[{id:'A',start:0,end:10},{id:'B',start:5,end:15,stretchRate:1.25}],result=plan(list,2);
  assert.equal(result.items[1].dur,8);assert.equal(result.items[1].c.start,5);assert.equal(result.items[1].c.end,15);assert.equal(result.length,16);
  for(const rate of [.79,1.251,NaN,Infinity,'1.1'])assert.throws(()=>plan([{id:'B',start:0,end:10,stretchRate:rate}]));
+});
+
+test('stopping an in-flight WSOLA preparation aborts it before scheduling audio',async()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),html=fs.readFileSync('Remix.html','utf8');
+ const stop=html.match(/function stop\(\).*$/m)[0],play=html.match(/async function play\(.*$/m)[0];
+ let preparedSignal=null,resolvePrepared=null,scheduled=0;
+ const scope=vm.createContext({
+  AbortController,
+  ctx:{resume:()=>Promise.resolve(),currentTime:0},
+  prepareStretchedBuffers:(list,context,signal)=>{preparedSignal=signal;return new Promise(resolve=>{resolvePrepared=resolve;});},
+  schedule:()=>{scheduled++;return 2;},
+  $:()=>({style:{},value:1}),note(){},clearTimeout(){},setTimeout(){},performance:{now:()=>0}
+ });
+ vm.runInContext('let sources=[],timer=null,playbackVersion=0,previewMaster=null,stretchAbortController=null;\n'+stop+'\n'+play,scope);
+ const pending=scope.play([{id:'B',start:0,end:2,stretchRate:1.2}]);
+ await new Promise(resolve=>setTimeout(resolve,0));
+ assert.ok(preparedSignal,'WSOLA preparation received an AbortSignal');
+ scope.stop();assert.equal(preparedSignal.aborted,true);
+ resolvePrepared(new Map());
+ assert.equal(await pending,false);assert.equal(scheduled,0);
 });
