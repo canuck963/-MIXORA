@@ -94,9 +94,9 @@ for(let i=0;i<3;i++){
 const previewStop=document.createElement('button');previewStop.textContent='⏹ Önizlemeyi durdur';previewStop.onclick=()=>{stop();note('⏹ Durduruldu.');};$('threeSuggestions').after(previewStop);
 function openDB(name,store){return new Promise((resolve,reject)=>{const r=indexedDB.open(name,1);r.onupgradeneeded=()=>r.result.createObjectStore(store,{keyPath:'id'});r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
 async function writeDB(name,store,value){const db=await openDB(name,store);try{await new Promise((resolve,reject)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).put(value);t.oncomplete=resolve;t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||Error('Kayıt iptal edildi.'));});}finally{db.close();}}
-async function prepareStretchedBuffers(list,context){
+async function prepareStretchedBuffers(list,context,signal){
  const prepared=new Map();
- for(const clip of list){const rate=clip.stretchRate??1;if(Math.abs(rate-1)<.005)continue;const track=tracks[clip.id];if(!track?.buffer)throw Error(clip.id+' kaynak sesi bulunamadı.');if(clip.end-clip.start>MixoraWsola.MAX_DURATION_SECONDS)throw Error('WSOLA tempo eşitlemesi en fazla 30 saniyelik kesitlerde kullanılabilir.');prepared.set(clip,await MixoraWsola.stretchAudioBufferAsync(track.buffer,clip.start,clip.end,rate,context));}
+ for(const clip of list){if(signal?.aborted){const error=new Error('WSOLA işlemi iptal edildi.');error.name='AbortError';throw error;}const rate=clip.stretchRate??1;if(Math.abs(rate-1)<.005)continue;const track=tracks[clip.id];if(!track?.buffer)throw Error(clip.id+' kaynak sesi bulunamadı.');if(clip.end-clip.start>MixoraWsola.MAX_DURATION_SECONDS)throw Error('WSOLA tempo eşitlemesi en fazla 30 saniyelik kesitlerde kullanılabilir.');prepared.set(clip,await MixoraWsola.stretchAudioBufferAsync(track.buffer,clip.start,clip.end,rate,context,{signal}));}
  return prepared;
 }
 async function latestProject(){const db=await openDB('mixora-studio','projects');try{return await new Promise((resolve,reject)=>{const r=db.transaction('projects').objectStore('projects').get('latest');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}finally{db.close();}}
