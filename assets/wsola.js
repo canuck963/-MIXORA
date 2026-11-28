@@ -3,15 +3,39 @@
 'use strict';
 const MAX_DURATION_SECONDS=30;
 let bufferCache=new WeakMap();
-function validateChannels(channels,sampleRate,rate,maxDuration=MAX_DURATION_SECONDS){
+function abortError(){const error=new Error('WSOLA işlemi iptal edildi.');error.name='AbortError';return error;}
+function throwIfAborted(signal){if(signal?.aborted)throw abortError();}
+function yieldToEventLoop(){return new Promise(resolve=>setTimeout(resolve,0));}
+function validateChannelShape(channels,sampleRate,rate,maxDuration=MAX_DURATION_SECONDS){
  if(!Array.isArray(channels)||channels.length<1||channels.length>2||!Number.isFinite(sampleRate)||sampleRate<8000||sampleRate>96000||!Number.isFinite(rate)||rate<.8||rate>1.25||!Number.isFinite(maxDuration)||maxDuration<.15||maxDuration>MAX_DURATION_SECONDS)throw Error('WSOLA ayarları geçersiz.');
  const length=channels[0]?.length;
  if(!Number.isSafeInteger(length)||length<Math.ceil(sampleRate*.15)||length>sampleRate*maxDuration)throw Error('Perde koruyan tempo eşitleme için kesit 0,15–30 saniye olmalı.');
- for(const channel of channels){if(!channel||!Number.isSafeInteger(channel.length)||channel.length!==length)throw Error('Ses kanalları aynı uzunlukta olmalı.');for(let i=0;i<length;i++)if(!Number.isFinite(channel[i]))throw Error('Ses kaynağında geçersiz örnek var.');}
+ for(const channel of channels)if(!channel||!Number.isSafeInteger(channel.length)||channel.length!==length)throw Error('Ses kanalları aynı uzunlukta olmalı.');
  return length;
 }
-function createJob(channels,sampleRate,rate,options={}){
- const inputLength=validateChannels(channels,sampleRate,rate,options.maxDurationSeconds??MAX_DURATION_SECONDS);
+function validateChannels(channels,sampleRate,rate,maxDuration=MAX_DURATION_SECONDS){
+ const length=validateChannelShape(channels,sampleRate,rate,maxDuration);
+ for(const channel of channels)for(let i=0;i<length;i++)if(!Number.isFinite(channel[i]))throw Error('Ses kaynağında geçersiz örnek var.');
+ return length;
+}
+async function validateChannelsAsync(channels,sampleRate,rate,options={}){
+ const length=validateChannelShape(channels,sampleRate,rate,options.maxDurationSeconds??MAX_DURATION_SECONDS);
+ const requested=Number.isFinite(options.validationChunkSize)?Math.floor(options.validationChunkSize):65536;
+ const chunkSize=Math.max(1024,Math.min(262144,requested));
+ for(let channelIndex=0;channelIndex<channels.length;channelIndex++){
+  const channel=channels[channelIndex];
+  for(let from=0;from<length;from+=chunkSize){
+   throwIfAborted(options.signal);
+   const to=Math.min(length,from+chunkSize);
+   for(let i=from;i<to;i++)if(!Number.isFinite(channel[i]))throw Error('Ses kaynağında geçersiz örnek var.');
+   if(to<length||channelIndex<channels.length-1)await yieldToEventLoop();
+  }
+ }
+ throwIfAborted(options.signal);
+ return length;
+}
+function createJob(channels,sampleRate,rate,options={},validatedLength){
+ const inputLength=validatedLength??validateChannels(channels,sampleRate,rate,options.maxDurationSeconds??MAX_DURATION_SECONDS);
  const frameLength=Math.min(inputLength,Math.max(256,Math.round(sampleRate*(options.frameSeconds??.02))));
  const overlap=Math.max(1,Math.floor(frameLength/2)),hop=frameLength-overlap,outputLength=Math.max(1,Math.round(inputLength/rate));
  if(outputLength>sampleRate*38)throw Error('Tempo eşitleme çıktısı çok uzun.');
@@ -46,15 +70,21 @@ function createJob(channels,sampleRate,rate,options={}){
 }
 function resultOf(job){return {channels:job.output,length:job.outputLength,sampleRate:job.sampleRate,duration:job.outputLength/job.sampleRate};}
 function stretchChannels(channels,sampleRate,rate,options={}){const job=createJob(channels,sampleRate,rate,options);while(job.processNext()){}return resultOf(job);}
-async function stretchChannelsAsync(channels,sampleRate,rate,options={}){const job=createJob(channels,sampleRate,rate,options),yieldEvery=Math.max(1,Math.floor(options.yieldEvery??24));while(job.processNext())if(job.processed()%yieldEvery===0)await new Promise(resolve=>setTimeout(resolve,0));return resultOf(job);}
-async function stretchAudioBufferAsync(buffer,start,end,rate,context){
+async function stretchChannelsAsync(channels,sampleRate,rate,options={}){const inputLength=await validateChannelsAsync(channels,sampleRate,rate,options),job=createJob(channels,sampleRate,rate,options,inputLength),requested=Number.isFinite(options.yieldEvery)?Math.floor(options.yieldEvery):12,yieldEvery=Math.max(1,requested);while(job.processNext()){throwIfAborted(options.signal);if(job.processed()%yieldEvery===0){await yieldToEventLoop();throwIfAborted(options.signal);}}throwIfAborted(options.signal);return resultOf(job);}
+async function stretchAudioBufferAsync(buffer,start,end,rate,context,options={}){
+ const signal=options.signal;throwIfAborted(signal);
  if(!buffer||!context||typeof context.createBuffer!=='function'||!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||!Number.isFinite(rate)||rate<.8||rate>1.25||end>buffer.duration+.001)throw Error('Tempo eşitleme için ses kesiti geçersiz.');
  const sampleRate=buffer.sampleRate,startFrame=Math.max(0,Math.floor(start*sampleRate)),endFrame=Math.min(buffer.length,Math.ceil(end*sampleRate));
  if(endFrame<=startFrame)throw Error('Tempo eşitleme için ses kesiti boş.');
  const key=startFrame+':'+endFrame+':'+rate.toFixed(5);let entries=bufferCache.get(buffer);if(!entries){entries=new Map();bufferCache.set(buffer,entries);}if(entries.has(key))return entries.get(key);
- const promise=(async()=>{const channels=Array.from({length:buffer.numberOfChannels},(_,index)=>buffer.getChannelData(index).subarray(startFrame,endFrame));const result=await stretchChannelsAsync(channels,sampleRate,rate);const output=context.createBuffer(result.channels.length,result.length,sampleRate);result.channels.forEach((channel,index)=>output.getChannelData(index).set(channel));return output;})();
- entries.set(key,promise);while(entries.size>3)entries.delete(entries.keys().next().value);
- try{return await promise;}catch(error){entries.delete(key);throw error;}
+ const channels=Array.from({length:buffer.numberOfChannels},(_,index)=>buffer.getChannelData(index).subarray(startFrame,endFrame));
+ const result=await stretchChannelsAsync(channels,sampleRate,rate,options);throwIfAborted(signal);
+ const output=context.createBuffer(result.channels.length,result.length,sampleRate);
+ result.channels.forEach((channel,index)=>output.getChannelData(index).set(channel));throwIfAborted(signal);
+ // Cache only complete buffers. An aborted audition must never poison the
+ // preview/export cache with a rejected or partially rendered promise.
+ entries.set(key,output);while(entries.size>3)entries.delete(entries.keys().next().value);
+ return output;
 }
 function clearCache(){bufferCache=new WeakMap();}
 const api={MAX_DURATION_SECONDS,stretchChannels,stretchChannelsAsync,stretchAudioBufferAsync,clearCache};
