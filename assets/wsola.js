@@ -88,5 +88,5 @@ async function stretchAudioBufferAsync(buffer,start,end,rate,context,options={})
 }
 function clearCache(){bufferCache=new WeakMap();}
 const api={MAX_DURATION_SECONDS,stretchChannels,stretchChannelsAsync,stretchAudioBufferAsync,clearCache};
-if(typeof module==='object')module.exports=api;else root.MixoraWsola=api;
+if(typeof module==='object'&&module.exports)module.exports=api;root.MixoraWsola=api;
 })(typeof globalThis==='object'?globalThis:this);
