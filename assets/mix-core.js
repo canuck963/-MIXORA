@@ -10,7 +10,9 @@ function plan(list, fade=1){
       const value=c[key];
       if(value!=null&&(!Number.isFinite(value)||value<0||value>max))throw Error('Geçersiz ses ayarı.');
     }
-    const dur=c.end-c.start,prev=items.at(-1);
+    const stretchRate=c.stretchRate??1;
+    if(!Number.isFinite(stretchRate)||stretchRate<.8||stretchRate>1.25)throw Error('Tempo eşitleme oranı 0,80–1,25 aralığında olmalı.');
+    const dur=(c.end-c.start)/stretchRate,prev=items.at(-1);
     const delay=c.delay??0;if(!Number.isFinite(delay)||delay<0||delay>420)throw Error('Geçersiz gecikme.');
     const at=!prev?0:c.overlay?prev.at+delay:Math.max(0,end-Math.min(fade,dur/2,prev.dur/2));
     items.push({c,dur,at});end=Math.max(end,at+dur);
