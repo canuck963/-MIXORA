@@ -40,3 +40,36 @@ Güncel PR #1, issue #2 ve PR #3 incelendi; `dbd260aa3099307f9bc0ea0efe2a82ff086
 3. SMTP outbox/kuyruk, ses dosyasının gerçek çözücüyle kontrolü, moderasyon ve yedek/geri yükleme işleri açık.
 4. Issue #2 BPM/beat-grid, pitch-preserving time-stretch ve müzik kalite testleri tamamlanmadı. Bu değişiklik ses motorunu veya mevcut üç öneriyi değiştirmiyor.
 5. GET artık doğrulama yapmadığından API kullanan istemciler doğrulama için JSON `{token}` gövdeli POST kullanmalı. Mevcut e-posta bağlantıları yeni onay sayfasıyla çalışır. Sayfa yenilendiğinde jeton bellekte kalmaz; e-postadaki bağlantı yeniden açılmalı.
+
+## 29 Ekim — şifre yenileme ekranında güvenilir yeniden deneme
+
+PR #1, issue #2 ve PR #3 ile tartışmaları incelendi. Güncel temel: `d6f5964287e9f0b4f829379075d362e64deff81d`. Ana dal ve geliştirme ağacında AGENTS.md yok. Brevo, SQLite kilit düzeltmeleri ve YouTube geliştirmeleri korundu. Değişiklikler ayrı `codex/password-reset-resilience` dalında; hedef PR #3'ün `codex/mixora-platform-beta` dalı. Canlıya dağıtım yapılmadı.
+
+- Şifre yenileme sayfası `reset-password.html` dosyasına ayrıldı. Erişilebilir etiket, şifre yöneticisi desteği, canlı durum mesajı ve mobil form eklendi.
+- Bağlantı jetonu açılışta URL'den kaldırılır; GET jetonu tüketmez. Eksik/aşırı uzun jetonda gönderim engellenir. Yenilemede bağlantının e-postadan yeniden açılması gerekir.
+- İstek sürerken tekrar gönderim engellenir. Ağ kesintisi, JSON olmayan hata yanıtı ve API hatası sonrasında yeniden deneme yapılabilir. Yanıt kaybında işlemin sunucuda tamamlanmış olabileceği açıkça belirtilir. Başarıda şifre alanı temizlenir ve tekrar gönderim kapatılır.
+- SMTP testinin eksik yapılandırma varsayımı düzeltildi. Entegrasyon testleri gerçek SMTP/Brevo ortamını devralmaz; dışarıya e-posta göndermez.
+
+Doğrulama: 9 Python entegrasyon testi, 7 Node testi (4 remix + 3 şifre formu), HTML/JS sözdizimi/yerel bağlantı, Python derleme ve diff kontrolleri geçti. Ayrı frontend build sistemi yok. Mobil Chromium/WebKit senaryosu eklendi; yerel Chromium çalıştırılabilir dosyası olmadığından tarayıcı paketi çalıştırılamadı. CI sonucu ayrıca doğrulanmalı.
+
+Sonraki somut işler:
+1. Bu dalın CI Chromium/WebKit sonucunu doğrula; gerçek iPhone'da e-posta bağlantısından şifre yenile/giriş yap akışını dene.
+2. Gerçek e-posta teslimatı ve üretim yapılandırmasını ayrıca doğrula; bu çalışma canlı e-posta hazır olma iddiasında bulunmaz.
+3. E-posta gönderimini veritabanı yazma işleminden ayıracak outbox/kuyruk ekle; sağlayıcı kesintilerini test et.
+4. Issue #2 için BPM belirsizliği, beat-grid ve pitch-preserving time-stretch; gerçek müzikle kalite değerlendirmesi hâlâ açık.
+5. Moderasyon, gerçek ses çözücü doğrulaması, yedek/geri yükleme ve yük testleri tamamlanmadan genel üretim hazır sayılmamalı.
+
+
+## 12 Kasım 2026 — BPM karşılaştırma ve hız önerisi (PR #8)
+
+- Mevcut 60–180 BPM pulse tahmini korunarak analiz sonucu güven oranı, düzenli aralık sayısı ve ilk güvenilir vuruş bilgisi dışarı açıldı. Eski `estimateTempo()` çağrıları geriye uyumlu.
+- İki stüdyo sayfasındaki tempo ölçüm düğmesi tahmini güven yüzdesini gösteriyor. Yeni yerel “Tempo eşleştirme” paneli seçili A/B kesitlerini analiz edip A normal/yarım/çift zaman grid seçenekleri için B hız çarpanlarını hesaplıyor; ±30% aralığındaki 1.0×'a en yakın seçeneği öneriyor. Hiç uygun seçenek yoksa en az sapmalı sonucu açıkça işaretliyor.
+- Bu yardımcı WAV/önizleme hızını değiştirmez, dosyaları sunucuya göndermez ve pitch-preserving time-stretch iddiası içermez. Hız değişimi uygulanırsa perde değişir; gerçek tempo eşitleme ve beat-grid editörü sonraki iş.
+- Yeni `tests/tempo-match.test.cjs`: 44.1/48 kHz sentetik 72/100/128/160 BPM, güven ve vuruş konumu, normal/yarım/çift zaman seçimi, ±30% dışı ve geçersiz girişler. Yerel Node testi 3/3 geçti. Tam depo testleri ve Chromium/WebKit bu oturumda checkout/CI olmadan çalıştırılmadı; PR dalına push sonrası GitHub Actions sonucu izlenmeli.
+- Devam: gerçek davul/senkop ve half/double tempo örnekleri; iPhone Safari’de panel erişilebilirliği; pitch-preserving time-stretch ve iki parça BPM/beat-grid uygulaması. PR #1 ses motoru taslağı ayrı kalır; issue #2 açık.
+
+
+### 12 Kasım CI düzeltmesi — BPM panelinin test ortamı
+
+- İlk push CI (#107/#108) Node testinde 4 hata gösterdi: yeni `analyzeTempo/tempoMatch` dışa aktarılmamış ve mevcut VM testinde `document` bulunmadığında UI paneli oluşturuluyordu. Bu gerçek CI hatası; yalnızca yerel test raporuna güvenilmedi.
+- Dışa aktarımlar düzeltildi; tempo paneli DOM yalnızca tarayıcı ortamında bağlanıyor. Yeni tempo testleri yerelde tekrar 3/3 geçti. Tam `tests/*.test.cjs` ve Chromium/WebKit CI yeniden çalıştırılmalı.
