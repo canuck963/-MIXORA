@@ -27,3 +27,8 @@ test('AudioBuffer adapter never caches an aborted WSOLA render',async()=>{
  const second=await stretchAudioBufferAsync(buffer,0,2,1.2,context());
  assert.strictEqual(first,second);assert.ok(Math.abs(first.duration-2/1.2)<1/sr);
 });
+
+test('WSOLA API is exported to both CommonJS and browser global scope',()=>{
+ const api=require('../assets/wsola.js');
+ assert.strictEqual(globalThis.MixoraWsola,api);
+});
