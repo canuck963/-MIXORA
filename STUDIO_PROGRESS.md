@@ -325,3 +325,12 @@ Bu PR kod incelemesine hazırdır; canlı dağıtım ve genel üretim hazırlı�
 - `tests/browser.cjs`: WSOLA'nın gerçek tarayıcıda yüklendiğini kontrol etmeye devam eder; önizlemede ve proje geri yüklendikten sonraki WAV dışa aktarmada üretilen B kesitinin PCM hash ve süresi karşılaştırılır. Böylece aynı kaynak/kesit/hız için önizleme ile export'un aynı WSOLA örneklerini kullandığı doğrulanır.
 - Önceki head `0d9c00e` için push/PR CI #46156166508 / #46156170488 tarayıcı adımında başarısız oldu. Node, syntax ve Python adımları geçti. Hata WSOLA ses üretiminden değil, browser test regex'inin nokta kaçışını iki kez yazmasından kaynaklandı; gerçek `önizlemesi.` durumuyla eşleşmedi. Regex düzeltildi; yeni CI sonucu bekleniyor.
 - Fiziksel iPhone Safari, gerçek iki ticari/kullanım hakkı bulunan parçada kulakla kalite/tempo drift, phrase/downbeat tespiti, stem separation, gerçek SMTP ve üretim dağıtımı açık kalır. PR #1 taslak ve Issue #2 açık tutulur; `main` değiştirilmez.
+
+
+### Nihai CI doğrulaması — 28 Kasım 2026, WSOLA bellek ve önizleme/WAV eşitliği
+
+- Kod/test commit'i [ee65481](https://github.com/canuck963/-MIXORA/commit/ee65481f1df65d78a2b0c9da0dfd81ff0c24332e) için push CI [#46157666106](https://github.com/canuck963/-MIXORA/actions/runs/46157666106) ve PR CI [#46157671251](https://github.com/canuck963/-MIXORA/actions/runs/46157671251) **başarılı**.
+- Node **90/90**, JavaScript/HTML syntax başarılı, Python **13/13**; Playwright Chromium ve WebKit mobil akışları başarılı.
+- Tarayıcı testi üç öneriyi dinleme/uygulama, projeyi kaydetme ve geri yükleme, WAV dışa aktarma, yerel kütüphane kaydı, hesap/yayın/beğeni/yorum ve eski live deck akışlarını çalıştırdı. Yeni WSOLA doğrulaması, preview ve proje geri yükleme sonrası WAV export için aynı B kesitinin örnek hash'ini ve süresini karşılaştırdı; ikisi eşleşti.
+- Yeni 24 MiB sınırı ve UI bütçe kapısı Node testlerinden geçti. Bu sınır, yüksek örnekleme hızlı stereo kesitlerde 30 saniyeden kısa bölüm gerektirebilir.
+- Bu sonuçlar otomatik Chromium/WebKit testidir; fiziksel iPhone Safari, gerçek şarkılarla subjektif kalite/tempo drift, downbeat/phrase analizi, gerçek SMTP ve üretim dağıtımı doğrulaması değildir.
