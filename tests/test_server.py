@@ -127,6 +127,12 @@ class API(unittest.TestCase):
         self.assertEqual(response['status'], 200)
         self.assertIn(b'function estimateTempo', response['body'])
 
+    def test_wsola_module_is_served(self):
+        response = self.call('/assets/wsola.js')
+        self.assertEqual(response['status'], 200)
+        self.assertIn(b'function stretchChannelsAsync', response['body'])
+        self.assertIn(b'root.MixoraWsola=api', response['body'])
+
     def test_security(self):
         cookie,_=self.register()
         self.assertEqual(self.call('/api/profile','PATCH',{'name':'Evil','bio':''},cookie=cookie,headers={'HTTP_ORIGIN':'https://evil.test'})['status'],403)
