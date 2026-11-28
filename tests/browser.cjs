@@ -48,7 +48,12 @@ function wavPeak(bytes){assert.equal(bytes.toString('ascii',0,4),'RIFF');let pea
  for(let i=0;i<3;i++){
   const before=await page.evaluate(()=>JSON.stringify({clips,fade:document.getElementById('fade').value}));
   await page.locator('[data-preview="'+i+'"]').click();
-  await page.waitForFunction(()=>/önizlemesi|Ses başlatılamadı/.test(document.getElementById('status').textContent),null,{timeout:20000});
+  try{
+   await page.waitForFunction(()=>/önizlemesi\\.|Ses başlatılamadı|Remix oynatılıyor/.test(document.getElementById('status').textContent),null,{timeout:20000});
+  }catch(error){
+   const diagnostic=await page.evaluate(()=>({status:document.getElementById('status').textContent,audioState:ctx.state,playbackVersion,stretchAborted:stretchAbortController?.signal?.aborted??null,loaded:Object.fromEntries(Object.entries(tracks).map(([id,t])=>[id,!!t?.buffer])),clipCount:clips.length}));
+   throw Error(name+' preview did not settle: '+JSON.stringify(diagnostic)+'; page errors: '+errors.join(' | ')+'; '+error.message);
+  }
   const previewStatus=await page.locator('#status').textContent();assert.match(previewStatus,/önizlemesi/,'suggestion '+i+' preview must finish before apply');
   assert.equal(await page.evaluate(()=>JSON.stringify({clips,fade:document.getElementById('fade').value})),before);
   await page.locator('[data-apply="'+i+'"]').click();
