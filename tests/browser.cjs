@@ -45,7 +45,23 @@ function wavPeak(bytes){assert.equal(bytes.toString('ascii',0,4),'RIFF');let pea
  await page.locator('#startA').fill('0.25');await page.locator('#endA').fill('9.75');await page.locator('#startB').fill('0.5');await page.locator('#endB').fill('9.75');
  await page.locator('#analyzeTempoMatch').click();await page.waitForFunction(()=>document.getElementById('tempoMatchStatus').textContent.includes('A 120 BPM')&&document.getElementById('tempoMatchStatus').textContent.includes('B 100 BPM'));
  await page.locator('#applyTempoMatch').click();assert.ok(Math.abs(await page.evaluate(()=>window.MixoraTempoStretchRate)-1.2)<.01);
- for(let i=0;i<3;i++){const before=await page.evaluate(()=>JSON.stringify({clips,fade:document.getElementById('fade').value}));await page.locator('[data-preview="'+i+'"]').click();await page.waitForTimeout(150);assert.equal(await page.evaluate(()=>JSON.stringify({clips,fade:document.getElementById('fade').value})),before);await page.locator('[data-apply="'+i+'"]').click();assert.equal(await page.evaluate(()=>clips[0].start),.25);assert.equal(await page.evaluate(()=>clips[1].start),.5);assert.ok(Math.abs(await page.evaluate(()=>clips[1].stretchRate)-1.2)<.01);await page.locator('#play').click();await page.waitForTimeout(150);await page.locator('#stop').click();assert.equal(await page.locator('#clips .clip').count(),2);}
+ for(let i=0;i<3;i++){
+  const before=await page.evaluate(()=>JSON.stringify({clips,fade:document.getElementById('fade').value}));
+  await page.locator('[data-preview="'+i+'"]').click();
+  await page.waitForFunction(()=>/önizlemesi|Ses başlatılamadı/.test(document.getElementById('status').textContent),null,{timeout:20000});
+  const previewStatus=await page.locator('#status').textContent();assert.match(previewStatus,/önizlemesi/,'suggestion '+i+' preview must finish before apply');
+  assert.equal(await page.evaluate(()=>JSON.stringify({clips,fade:document.getElementById('fade').value})),before);
+  await page.locator('[data-apply="'+i+'"]').click();
+  const applied=await page.evaluate(()=>({clips:clips.map(c=>({id:c.id,start:c.start,end:c.end,stretchRate:c.stretchRate})),status:document.getElementById('status').textContent}));
+  assert.equal(applied.clips.length,2,'suggestion '+i+' did not apply two clips: '+JSON.stringify(applied));
+  assert.equal(applied.clips[0].start,.25,'suggestion '+i+' changed A range');
+  assert.equal(applied.clips[1].start,.5,'suggestion '+i+' changed B range');
+  assert.ok(Math.abs(applied.clips[1].stretchRate-1.2)<.01,'suggestion '+i+' lost WSOLA rate');
+  await page.locator('#play').click();
+  await page.waitForFunction(()=>/Remix oynatılıyor|Ses başlatılamadı/.test(document.getElementById('status').textContent),null,{timeout:20000});
+  assert.match(await page.locator('#status').textContent(),/Remix oynatılıyor/,'suggestion '+i+' applied preview failed');
+  await page.locator('#stop').click();assert.equal(await page.locator('#clips .clip').count(),2);
+ }
  await page.locator('#saveProject').click();await page.waitForFunction(()=>/saklandı|İşlem tamamlanamadı/.test(document.getElementById('status').textContent));assert.match(await page.locator('#status').textContent(),/saklandı/);
  await page.locator('#clear').click();await page.locator('#restoreProject').click();await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Proje açıldı'));
  assert.equal(await page.locator('#startA').inputValue(),'0.25');assert.equal(await page.locator('#startB').inputValue(),'0.5');assert.ok(Math.abs(await page.evaluate(()=>clips[1].stretchRate)-1.2)<.01,'saved project must retain WSOLA rate');
