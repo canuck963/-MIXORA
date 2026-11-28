@@ -1,12 +1,47 @@
 /* Extends the existing editor without replacing manual editing, overlay or WAV export. */
 'use strict';
 const studioPanel=document.createElement('section');studioPanel.className='card';
-studioPanel.innerHTML='<h2>✦ Üç farklı remix yönü</h2><p>Aynı iki parçadan üç düzenleme taslağı. Bunlar kurallı önerilerdir; vokal ayrımı veya müzikal cümle analizi yapmaz. A ve B için başlangıç/bitiş seç. Önerileri çizelgeni değiştirmeden dinle, beğendiğini uygula. Yapay bas efekti eklenmez.</p><div id="threeSuggestions" class="suggestions"></div><h3>Çalışmanı sakla</h3><label>Proje adı<input id="projectName" maxlength="90" value="Yeni remix"></label><button id="saveProject">Projeyi bu cihazda sakla</button><button id="restoreProject" class="muted">Son projeyi aç</button><button id="saveLocalMix">Remixi cihaz kütüphaneme kaydet</button><a class="studio-link" href="community.html">Toplulukta yayımla ↗</a><p class="tiny">Proje ses dosyalarını da saklar. Cihaz depolaması temizlenirse kaybolabilir; WAV yedeğini indir. Toplulukta yayımlamak için WAV dosyanı seç.</p>';
+studioPanel.innerHTML='<h2>✦ Üç farklı remix yönü</h2><p>Aynı iki parçadan üç düzenleme taslağı. Bunlar kurallı önerilerdir; vokal ayrımı veya müzikal cümle analizi yapmaz. A ve B için başlangıç/bitiş seç. Önerileri çizelgeni değiştirmeden dinle, beğendiğini uygula. Yapay bas efekti eklenmez.</p><h3>🎚️ Perdeyi koruyarak tempo eşitleme (beta)</h3><p>Seçili A/B kesitlerinin BPM değerlerini karşılaştır. Güvenilir sonuç varsa B parçasını 0,80–1,25× aralığında WSOLA ile A temposuna yaklaştırır. İşlem yalnızca cihazda yapılır; B kesiti en fazla 30 saniye olmalı.</p><button id="analyzeTempoMatch" class="muted">A/B temposunu analiz et</button><button id="applyTempoMatch" disabled>B parçasını A temposuna eşitle</button><button id="clearTempoMatch" class="muted" disabled>Tempo eşitlemeyi kaldır</button><p id="tempoMatchStatus" class="tiny" role="status">Önce iki parçayı yükle. Analiz otomatik oynatma yapmaz.</p><div id="threeSuggestions" class="suggestions"></div><h3>Çalışmanı sakla</h3><label>Proje adı<input id="projectName" maxlength="90" value="Yeni remix"></label><button id="saveProject">Projeyi bu cihazda sakla</button><button id="restoreProject" class="muted">Son projeyi aç</button><button id="saveLocalMix">Remixi cihaz kütüphaneme kaydet</button><a class="studio-link" href="community.html">Toplulukta yayımla ↗</a><p class="tiny">Proje ses dosyalarını da saklar. Cihaz depolaması temizlenirse kaybolabilir; WAV yedeğini indir. Toplulukta yayımlamak için WAV dosyanı seç.</p>';
 document.querySelector('main').append(studioPanel);
+let analyzedTempoRate=null,appliedTempoRate=null;
+function resetTempoMatch(message='Kaynak veya kesit değişti; yeniden analiz et.') {
+ analyzedTempoRate=null;appliedTempoRate=null;window.MixoraTempoStretchRate=null;
+ for(const clip of clips)if(clip.id==='B')delete clip.stretchRate;
+ $('applyTempoMatch').disabled=true;$('clearTempoMatch').disabled=true;$('tempoMatchStatus').textContent=message;
+ if(clips.length)render();
+}
+$('analyzeTempoMatch').onclick=()=>{
+ try{
+  if(!tracks.A||!tracks.B)throw Error('Önce A ve B parçalarını yükle.');
+  const a=analyzeTempo(tracks.A.buffer,Number($('startA').value),Number($('endA').value));
+  const b=analyzeTempo(tracks.B.buffer,Number($('startB').value),Number($('endB').value));
+  if(!a||!b)throw Error('Seçili kesitlerde güvenilir BPM ölçümü için en az 4 saniyelik düzenli ritim gerekli.');
+  if(a.ambiguous||b.ambiguous)throw Error('Tempo belirsiz (yarım/çift zaman veya düzensiz vuruş). Otomatik eşitleme yapılmadı.');
+  const match=tempoMatch(a.bpm,b.bpm,.8,1.25);
+  if(!match||!match.hasInRange)throw Error('B parçasını A temposuna getirmek için gereken hız 0,80–1,25 aralığının dışında.');
+  analyzedTempoRate=match.recommended.rate;$('applyTempoMatch').disabled=false;
+  $('tempoMatchStatus').textContent='A '+a.bpm+' BPM · B '+b.bpm+' BPM · B için '+analyzedTempoRate.toFixed(2)+'× önerildi. Uygulamak için düğmeye bas.';
+  note('Tempo analizi hazır. B parçası henüz değiştirilmedi.');
+ }catch(error){analyzedTempoRate=null;$('applyTempoMatch').disabled=true;$('tempoMatchStatus').textContent=error.message;note(error.message);}
+};
+$('applyTempoMatch').onclick=()=>{
+ try{
+  if(analyzedTempoRate===null)throw Error('Önce A/B temposunu analiz et.');
+  const targets=clips.filter(clip=>clip.id==='B');
+  if(targets.some(clip=>clip.end-clip.start>MixoraWsola.MAX_DURATION_SECONDS))throw Error('Mevcut B kesitlerinden biri 30 saniyeyi aşıyor. Daha kısa kesit seç.');
+  appliedTempoRate=analyzedTempoRate;window.MixoraTempoStretchRate=appliedTempoRate;targets.forEach(clip=>clip.stretchRate=appliedTempoRate);
+  $('clearTempoMatch').disabled=false;$('tempoMatchStatus').textContent+=' B kesitlerine perde korunarak uygulanacak.';
+  if(clips.length)render();note('Tempo eşitleme ayarı hazır. Önizleme ve WAV aynı WSOLA çıktısını kullanacak.');
+ }catch(error){note(error.message);$('tempoMatchStatus').textContent=error.message;}
+};
+$('clearTempoMatch').onclick=()=>resetTempoMatch('Tempo eşitleme kaldırıldı; kaynak sesler özgün hızında çalacak.');
+for(const id of ['fileA','fileB'])$(id).addEventListener('change',()=>resetTempoMatch());
+for(const id of ['startA','endA','startB','endB'])$(id).addEventListener('input',()=>resetTempoMatch());
 const suggestionNames=['Duygusal','Enerjik','Sinematik'];
 function selectedSuggestion(i){
   const ranges={};for(const id of ['A','B'])ranges[id]={start:Number($('start'+id).value),end:Number($('end'+id).value)};
   const suggestion = MixCore.suggestions(tracks.A?.buffer.duration, tracks.B?.buffer.duration, ranges)[i];
+  if(appliedTempoRate!==null){for(const clip of suggestion.clips){if(clip.id!=='B')continue;if(clip.end-clip.start>MixoraWsola.MAX_DURATION_SECONDS)suggestion.description+=' B kesiti 30 saniyeyi aştığı için WSOLA tempo eşitlemesi uygulanmadı.';else clip.stretchRate=appliedTempoRate;}}
   if (i === 0) {
     const [a, b] = suggestion.clips;
     const maxOverlap = Math.min(suggestion.fade, (a.end - a.start) / 2, (b.end - b.start) / 2);
@@ -59,6 +94,11 @@ for(let i=0;i<3;i++){
 const previewStop=document.createElement('button');previewStop.textContent='⏹ Önizlemeyi durdur';previewStop.onclick=()=>{stop();note('⏹ Durduruldu.');};$('threeSuggestions').after(previewStop);
 function openDB(name,store){return new Promise((resolve,reject)=>{const r=indexedDB.open(name,1);r.onupgradeneeded=()=>r.result.createObjectStore(store,{keyPath:'id'});r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
 async function writeDB(name,store,value){const db=await openDB(name,store);try{await new Promise((resolve,reject)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).put(value);t.oncomplete=resolve;t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||Error('Kayıt iptal edildi.'));});}finally{db.close();}}
+async function prepareStretchedBuffers(list,context){
+ const prepared=new Map();
+ for(const clip of list){const rate=clip.stretchRate??1;if(Math.abs(rate-1)<.005)continue;const track=tracks[clip.id];if(!track?.buffer)throw Error(clip.id+' kaynak sesi bulunamadı.');if(clip.end-clip.start>MixoraWsola.MAX_DURATION_SECONDS)throw Error('WSOLA tempo eşitlemesi en fazla 30 saniyelik kesitlerde kullanılabilir.');prepared.set(clip,await MixoraWsola.stretchAudioBufferAsync(track.buffer,clip.start,clip.end,rate,context));}
+ return prepared;
+}
 async function latestProject(){const db=await openDB('mixora-studio','projects');try{return await new Promise((resolve,reject)=>{const r=db.transaction('projects').objectStore('projects').get('latest');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}finally{db.close();}}
 async function busy(id,fn){const button=$(id);if(button.disabled)return;button.disabled=true;try{await fn();}catch(e){note('İşlem tamamlanamadı: '+e.message);}finally{button.disabled=false;}}
 function editorState(){
@@ -103,6 +143,7 @@ $('saveProject').onclick=()=>busy('saveProject',async()=>{
   await writeDB('mixora-studio','projects',project);note('✓ Kaydet düğmesine bastığın andaki proje ve kaynak sesler bu cihazda saklandı.');
 });
 $('restoreProject').onclick=()=>busy('restoreProject',async()=>{
+  resetTempoMatch('Kaydedilmiş proje açılıyor; projede saklanan tempo ayarı korunacak.');
   // Reserve both sources now, so an older pending upload cannot overwrite a restore.
   const versions={A:++loadVersions.A,B:++loadVersions.B},before=editorState();
   const unchanged=()=>{
@@ -137,11 +178,11 @@ $('saveLocalMix').onclick=()=>busy('saveLocalMix',async()=>{
   if(!clips.length)throw Error('Önce çizelge oluştur.');
   const length=plan(clips).length;if(length>300)throw Error('Cihaz kütüphanesi için en fazla 5 dakika seç.');
   const title=$('projectName').value||'Yeni remix';
-  note('Ses hazırlanıyor…');const engine=new OfflineAudioContext(2,Math.ceil((length+.2)*44100),44100);schedule(clips,engine,0);
+  note('Ses hazırlanıyor…');const engine=new OfflineAudioContext(2,Math.ceil((length+.2)*44100),44100);const prepared=await prepareStretchedBuffers(clips,engine);schedule(clips,engine,0,undefined,prepared);
   const rendered=await engine.startRendering();
   const peak=MixCore.applyPeakCeiling(rendered,-1);
   const file=new File([wav(rendered)],'MIXORA-remix.wav',{type:'audio/wav'});
   await writeDB('mixora-community-demo','posts',{id:crypto.randomUUID(),author:'Ben',title,description:'MIXORA Studio kaydı',fileBytes:await file.arrayBuffer(),fileName:file.name,fileType:file.type,created:Date.now(),likes:0,liked:false,comments:[]});
   note('✓ Remix kaydedildi. '+(peak.gain<1?'Örnek tepe seviyesi -1 dBFS sınırına indirildi. ':'Örnek tepe seviyesi -1 dBFS sınırına göre kontrol edildi. ')+'Cihazdaki kayıtlar sayfasından dinleyip ses dosyasını paylaşabilirsin.');
 });
-window.addEventListener('pagehide',()=>stop());
+window.addEventListener('pagehide',()=>{stop();MixoraWsola.clearCache();});
